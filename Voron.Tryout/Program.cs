@@ -6,11 +6,16 @@ namespace Voron.Tryout
     {
         private static void Main(string[] args)
         {
-	        for (int i = 0; i < 30; i++)
+	        for (int i = 0; i < 111; i++)
 	        {
-		        Console.WriteLine("{0} -> {1}", i, PrevPowerOfTwo(i));
+		        Console.WriteLine("{0} -> {1}", i, Test(i));
 	        }
         }
+
+		private static int Test(int i)
+		{
+			return i >> 5;
+		}
 
 		private static int PrevPowerOfTwo(int x)
 		{

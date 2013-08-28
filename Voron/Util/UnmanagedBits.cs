@@ -5,15 +5,20 @@ namespace Voron.Util
     public unsafe class UnmanagedBits
     {
         private readonly int* _ptr;
-        private readonly int _size;
+        private readonly long _size;
         private readonly UnmanagedBits _pages;
 
-        public UnmanagedBits(byte* ptr, int size, UnmanagedBits pages)
+        public UnmanagedBits(byte* ptr, long size, UnmanagedBits pages)
         {
             _ptr = (int*)ptr;
             _size = size;
             _pages = pages;
         }
+
+	    public long Size
+	    {
+			get { return _size; }
+	    }
 
         public bool this[int pos]
         {

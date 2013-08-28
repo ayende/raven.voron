@@ -45,6 +45,7 @@
   <ItemGroup>
     <Compile Include="Debugging\EnvironmentStats.cs" />
     <Compile Include="Impl\AbstractPager.cs" />
+    <Compile Include="Impl\BitBuffer.cs" />
     <Compile Include="Impl\ConsecutiveSequences.cs" />
     <Compile Include="Impl\Constants.cs" />
     <Compile Include="Impl\Extensions\ConcurrentQueueExtensions.cs" />
@@ -52,9 +53,12 @@
     <Compile Include="Impl\FileHeaders\TreeFlags.cs" />
     <Compile Include="Impl\FileHeaders\TreeRootHeader.cs" />
     <Compile Include="Impl\FlushMode.cs" />
+    <Compile Include="Impl\FreePagesRepository.cs" />
     <Compile Include="Impl\FreeSpaceRepository.cs" />
+    <Compile Include="Impl\IBufferProvider.cs" />
     <Compile Include="Impl\IFreeSpaceRepository.cs" />
     <Compile Include="Impl\IVirtualPager.cs" />
+    <Compile Include="Impl\MemoryMapBufferProvider.cs" />
     <Compile Include="Impl\MemoryMapPager.cs" />
     <Compile Include="Impl\PagerState.cs" />
     <Compile Include="Impl\PureMemoryPager.cs" />
