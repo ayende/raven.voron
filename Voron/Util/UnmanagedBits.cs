@@ -22,7 +22,7 @@ namespace Voron.Util
                 if(pos < 0 || pos >= _size)
                     throw new ArgumentOutOfRangeException("pos");
 
-                return (_ptr[pos >> 5] & (1 << (pos & 31))) == 0;
+                return (_ptr[pos >> 5] & (1 << (pos & 31))) != 0;
             }
             set
             {
