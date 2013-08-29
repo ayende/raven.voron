@@ -41,7 +41,7 @@ namespace Voron.Impl
 
 			for (; page < Pages.Size; page++)
 			{
-				if (Pages[(int) page]) // TODO arek // free page
+				if (Pages[page]) // free page
 				{
 					if (range.Count == 0 || range[range.Count - 1] == page - 1) // when empty or continuous
 					{

@@ -6,8 +6,6 @@
 
 using System;
 using System.Collections.Generic;
-using System.Linq;
-using Voron.Util;
 
 namespace Voron.Impl
 {
@@ -51,7 +49,7 @@ namespace Voron.Impl
 		public void Add(long transactionNumber, long pageNumber)
 		{
 			var buffer = GetBufferForTransaction(transactionNumber);
-			buffer.Pages[(int) pageNumber] = true; // TODO arek - we need to delete this (int) cast
+			buffer.Pages[pageNumber] = true;
 		}
 
 		public BitBuffer GetBufferForTransaction(long transactionNumber)
@@ -69,7 +67,7 @@ namespace Voron.Impl
 			{
 				foreach (var freePageNumber in result)
 				{
-					buffer.Pages[(int) freePageNumber] = false; //TODO arek // mark returned pages as busy
+					buffer.Pages[freePageNumber] = false; // mark returned pages as busy
 				}
 			}
 
