@@ -49,6 +49,7 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Impl\BitBufferTests.cs" />
     <Compile Include="Impl\ConsecutiveSequencesTests.cs" />
     <Compile Include="Impl\FreePagesRepositoryTests.cs" />
     <Compile Include="MultiValueTree.cs" />

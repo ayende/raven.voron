@@ -43,5 +43,13 @@ namespace Voron.Util
                     _ptr[pos >> 5] &= ~(1 << (pos & 31));
             }
         }
+
+		public void Clear()
+		{
+			for (int i = 0; i < _size; i++)
+			{
+				this[i] = false;
+			}
+		}
     }
 }

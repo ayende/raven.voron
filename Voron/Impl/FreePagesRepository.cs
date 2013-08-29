@@ -6,6 +6,8 @@
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
+using Voron.Util;
 
 namespace Voron.Impl
 {
@@ -57,15 +59,27 @@ namespace Voron.Impl
 			return Buffers[transactionNumber & 1];
 		}
 
+		public IList<long> Find(long transactionNumber, int numberOfFreePages)
+		{
+			var buffer = GetBufferForTransaction(transactionNumber);
+
+			var result = buffer.GetContinuousRangeOfFreePages(numberOfFreePages);
+
+			if (result != null)
+			{
+				foreach (var freePageNumber in result)
+				{
+					buffer.Pages[(int) freePageNumber] = false; //TODO arek // mark returned pages as busy
+				}
+			}
+
+			return result;
+		}
+
 		public void Dispose()
 		{
 			bufferProviders[0].Dispose();
 			bufferProviders[1].Dispose();
-		}
-
-		public IList<long> Find(long transactionNumber, int numberOfPages)
-		{
-			return new List<long>();
 		}
 	}
 }

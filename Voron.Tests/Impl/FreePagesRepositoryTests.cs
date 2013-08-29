@@ -7,6 +7,7 @@
 using System;
 using System.IO;
 using Voron.Impl;
+using Voron.Util;
 using Xunit;
 
 namespace Voron.Tests.Impl
@@ -74,19 +75,37 @@ namespace Voron.Tests.Impl
 			{
 				var numbersOfFreePages = freePages.Find(1, 2);
 
-				Assert.Equal(0, numbersOfFreePages.Count);
+				Assert.Null(numbersOfFreePages);
 			}
 		}
 
 		[Fact]
-		public void CanGetFreePages()
+		public void CanGetFreePagesFromTheBegin()
 		{
 			using (var freePages = new FreePagesRepository("free-space", 4))
 			{
 				const int transaction = 1;
 
-				freePages.Add(transaction, 3);
+				freePages.Add(transaction, 0);
+				freePages.Add(transaction, 1);
+
+				var numbersOfFreePages = freePages.Find(transaction, 2);
+
+				Assert.Equal(2, numbersOfFreePages.Count);
+				Assert.Equal(0, numbersOfFreePages[0]);
+				Assert.Equal(1, numbersOfFreePages[1]);
+			}
+		}
+
+		[Fact]
+		public void CanGetFreePagesFromTheEnd()
+		{
+			using (var freePages = new FreePagesRepository("free-space", 4))
+			{
+				const int transaction = 1;
+
 				freePages.Add(transaction, 2);
+				freePages.Add(transaction, 3);
 
 				var numbersOfFreePages = freePages.Find(transaction, 2);
 
@@ -96,7 +115,122 @@ namespace Voron.Tests.Impl
 			}
 		}
 
-		private void DeleteFiles()
+		[Fact]
+		public void CanGetFreePagesFromTheMiddleEnd()
+		{
+			using (var freePages = new FreePagesRepository("free-space", 4))
+			{
+				const int transaction = 1;
+
+				freePages.Add(transaction, 1);
+				freePages.Add(transaction, 2);
+
+				var numbersOfFreePages = freePages.Find(transaction, 2);
+
+				Assert.Equal(2, numbersOfFreePages.Count);
+				Assert.Equal(1, numbersOfFreePages[0]);
+				Assert.Equal(2, numbersOfFreePages[1]);
+			}
+		}
+
+		[Fact]
+		public void GettingFreePagesShouldMarkThemAsBusy()
+		{
+			using (var freePages = new FreePagesRepository("free-space", 10))
+			{
+				const int transaction = 1;
+
+				freePages.Add(transaction, 4);
+				freePages.Add(transaction, 5);
+				freePages.Add(transaction, 6);
+
+				freePages.Find(transaction, 2);
+
+				var pages = freePages.GetBufferForTransaction(transaction).Pages;
+
+				Assert.False(pages[4]); // should mark as busy
+				Assert.False(pages[5]); // should mark as busy
+				Assert.True(pages[6]); // should remain free
+			}
+		}
+
+		[Fact]
+		public void WillGetFirstRangeWithEnoughFreePages()
+		{
+			using (var freePages = new FreePagesRepository("free-space", 10))
+			{
+				const int transaction = 1;
+
+				freePages.Add(transaction, 1);
+
+				freePages.Add(transaction, 4);
+				freePages.Add(transaction, 5);
+
+				freePages.Add(transaction, 7);
+				freePages.Add(transaction, 8);
+				freePages.Add(transaction, 9);
+
+				var numbersOfFreePages = freePages.Find(transaction, 2);
+
+				Assert.Equal(2, numbersOfFreePages.Count);
+				Assert.Equal(4, numbersOfFreePages[0]);
+				Assert.Equal(5, numbersOfFreePages[1]);
+
+				numbersOfFreePages = freePages.Find(transaction, 1);
+
+				Assert.Equal(1, numbersOfFreePages.Count);
+				Assert.Equal(7, numbersOfFreePages[0]);
+
+				numbersOfFreePages = freePages.Find(transaction, 2);
+
+				Assert.Equal(2, numbersOfFreePages.Count);
+				Assert.Equal(8, numbersOfFreePages[0]);
+				Assert.Equal(9, numbersOfFreePages[1]);
+			}
+		}
+
+		[Fact]
+		public void MustNotReturnLessFreePagesThanRequested()
+		{
+			using (var freePages = new FreePagesRepository("free-space", 5))
+			{
+				const int transaction = 1;
+
+				freePages.Add(transaction, 2);
+				freePages.Add(transaction, 3);
+
+				// 2 pages are free but we request for 3
+				var numbersOfFreePages = freePages.Find(transaction, 3);
+
+				Assert.Null(numbersOfFreePages);
+			}
+		}
+
+		[Fact]
+		public void MustNotMergeFreePagesFromEndAndBegin()
+		{
+			using (var freePages = new FreePagesRepository("free-space", 10))
+			{
+				const int transaction = 1;
+
+				freePages.Add(transaction, 7);
+				freePages.Add(transaction, 8);
+				freePages.Add(transaction, 9);
+
+				var numbersOfFreePages = freePages.Find(transaction, 1); // move searching index
+
+				Assert.Equal(1, numbersOfFreePages.Count);
+				Assert.Equal(7, numbersOfFreePages[0]);
+
+				freePages.Add(transaction, 0); // free page 0
+
+				numbersOfFreePages = freePages.Find(transaction, 3);
+				Assert.Null(numbersOfFreePages);
+			}
+		}
+
+		private
+			void DeleteFiles()
 		{
 			if (File.Exists("free-space-0"))
 				File.Delete("free-space-0");
