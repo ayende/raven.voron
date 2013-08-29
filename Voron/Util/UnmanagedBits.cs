@@ -44,12 +44,20 @@ namespace Voron.Util
             }
         }
 
-		public static long GetSizeInBytesToAllocate(long arraySize)
+		public static long GetSizeOfIntArrayFor(long numberOfBits)
 		{
-			if (arraySize <= 0)
+			if (numberOfBits <= 0)
 				return 0;
 
-			return (arraySize - 1) / 32 + 1;
+			return (numberOfBits - 1) / 32 + 1;
+		}
+
+		public static long GetSizeInBytesFor(long numberOfBits)
+		{
+			if (numberOfBits <= 0)
+				return 0;
+
+			return sizeof(int) * GetSizeOfIntArrayFor(numberOfBits);
 		}
     }
 }

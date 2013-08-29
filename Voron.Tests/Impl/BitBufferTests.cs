@@ -5,16 +5,37 @@
 // -----------------------------------------------------------------------
 
 using Voron.Impl;
+using Voron.Util;
 using Xunit;
 
 namespace Voron.Tests.Impl
 {
 	public unsafe class BitBufferTests
 	{
+		private int[] AllocateMemoryForBitBuffer(long numberOfPages)
+		{
+			return new int[UnmanagedBits.GetSizeOfIntArrayFor(1 + 2*numberOfPages)];
+		}
+
+		[Fact]
+		public void BitBufferConstructor()
+		{
+			var bytes = AllocateMemoryForBitBuffer(10);
+
+			fixed (int* ptr = bytes)
+			{
+				var buffer = new BitBuffer(ptr, 10);
+
+				buffer.Pages[0] = true;
+
+				Assert.True(buffer.AllBits[1]);
+			}
+		}
+
 		[Fact]
 		public void ShouldReturnEmptyRangeOfFreeBits()
 		{
-			var bytes = new int[BitBuffer.CalculateSizeForAllocation(10)];
+			var bytes = AllocateMemoryForBitBuffer(10);
 
 			fixed (int* ptr = bytes)
 			{
@@ -31,7 +52,7 @@ namespace Voron.Tests.Impl
 		[Fact]
 		public void ShouldReturnNextRangesOfFreeBits()
 		{
-			var bytes = new int[BitBuffer.CalculateSizeForAllocation(10)];
+			var bytes = AllocateMemoryForBitBuffer(10);
 
 			fixed (int* ptr = bytes)
 			{
@@ -71,7 +92,7 @@ namespace Voron.Tests.Impl
 		[Fact]
 		public void ShouldWorkInCycle()
 		{
-			var bytes = new int[BitBuffer.CalculateSizeForAllocation(6)];
+			var bytes = AllocateMemoryForBitBuffer(6);
 
 			fixed (int* ptr = bytes)
 			{
@@ -112,7 +133,7 @@ namespace Voron.Tests.Impl
 		[Fact]
 		public void InitiallyBufferIsNotDirty()
 		{
-			var bytes = new int[BitBuffer.CalculateSizeForAllocation(1)];
+			var bytes = AllocateMemoryForBitBuffer(1);
 
 			fixed (int* ptr = bytes)
 			{
@@ -124,7 +145,7 @@ namespace Voron.Tests.Impl
 		[Fact]
 		public void CanMarkBufferAsDirty()
 		{
-			var bytes = new int[BitBuffer.CalculateSizeForAllocation(1)];
+			var bytes = AllocateMemoryForBitBuffer(1);
 
 			fixed (int* ptr = bytes)
 			{

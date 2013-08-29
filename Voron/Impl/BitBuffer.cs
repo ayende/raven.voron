@@ -19,6 +19,8 @@ namespace Voron.Impl
 			AllBits = new UnmanagedBits(ptr, 1 + numberOfPages + numberOfPages, null);
 			Pages = new UnmanagedBits(ptr + 1, numberOfPages, null);
 			ModifiedPages = new UnmanagedBits(ptr + 1 + numberOfPages, numberOfPages, null);
+
+			Ptr = ptr;
 		}
 
 		public UnmanagedBits AllBits { get; set; }
@@ -26,6 +28,8 @@ namespace Voron.Impl
 		public UnmanagedBits Pages { get; set; }
 
 		public UnmanagedBits ModifiedPages { get; set; }
+
+		public int* Ptr { get; private set; }
 
 		public bool IsDirty
 		{
@@ -72,14 +76,12 @@ namespace Voron.Impl
 			return range.Count == numberOfPagesToGet ? range : null;
 		}
 
-		public static long CalculateSizeForAllocation(long numberOfPages)
+		public static long CalculateSizeInBytesForAllocation(long numberOfPages)
 		{
-			return UnmanagedBits.GetSizeInBytesToAllocate(
+			return UnmanagedBits.GetSizeInBytesFor(
 				1 + // dirty bit
 				numberOfPages + // pages
 				numberOfPages); // modified pages
-
-
 		}
 	}
 }

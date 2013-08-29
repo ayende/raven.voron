@@ -229,8 +229,40 @@ namespace Voron.Tests.Impl
 			}
 		}
 
-		private
-			void DeleteFiles()
+		[Fact]
+		public void WhenBufferIsDirtyShouldCopySecondBufferBeforeCanProcess()
+		{
+			using (var freePages = new FreePagesRepository("free-space", 10))
+			{
+				var tx1 = 1;
+				var tx2 = 2;
+
+				freePages.Add(tx1, 1);
+				freePages.Add(tx1, 3);
+
+				freePages.Add(tx1, 4);
+				freePages.Add(tx1, 7);
+
+				var buffer1 = freePages.GetBufferForTransaction(tx1);
+				var buffer2 = freePages.GetBufferForTransaction(tx2);
+
+				buffer1.IsDirty = true; // force as dirty so next get should return a clean buffer which will be a copy of a second buffer
+
+				buffer1 = freePages.GetBufferForTransaction(tx1);
+
+				Assert.False(buffer1.IsDirty);
+				Assert.Equal(buffer1.AllBits.Size, buffer2.AllBits.Size);
+
+
+				for (int i = 0; i < buffer1.AllBits.Size; i++)
+				{
+					Assert.Equal(buffer1.Pages[i], buffer2.Pages[i]);
+				}
+
+			}
+		}
+
+		private void DeleteFiles()
 		{
 			if (File.Exists("free-space-0"))
 				File.Delete("free-space-0");

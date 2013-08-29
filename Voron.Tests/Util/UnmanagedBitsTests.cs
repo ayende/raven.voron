@@ -15,7 +15,7 @@ namespace Voron.Tests.Util
 		[Fact]
 		public void CanSetAndGetTheSameValues()
 		{
-			var bytes = new int[UnmanagedBits.GetSizeInBytesToAllocate(128)];
+			var bytes = new int[UnmanagedBits.GetSizeOfIntArrayFor(128)];
 
 			unsafe
 			{

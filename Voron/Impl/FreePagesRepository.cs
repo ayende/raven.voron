@@ -6,6 +6,8 @@
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
+using Voron.Util;
 
 namespace Voron.Impl
 {
@@ -36,7 +38,7 @@ namespace Voron.Impl
 
 			for (int i = 0; i < 2; i++)
 			{
-				var size = BitBuffer.CalculateSizeForAllocation(numberOfPages);
+				var size = BitBuffer.CalculateSizeInBytesForAllocation(numberOfPages);
 
 				bufferProviders[i].IncreaseSize(size);
 
@@ -54,7 +56,19 @@ namespace Voron.Impl
 
 		public BitBuffer GetBufferForTransaction(long transactionNumber)
 		{
-			return Buffers[transactionNumber & 1];
+			var selectedBuffer = Buffers[transactionNumber & 1];
+
+			if (selectedBuffer.IsDirty)
+			{
+				var copy = Buffers[(transactionNumber + 1) & 1];
+				
+				Debug.Assert(selectedBuffer.AllBits.Size == copy.AllBits.Size);
+
+				NativeMethods.memcpy((byte*) selectedBuffer.Ptr, (byte*) copy.Ptr,
+				                     (int) UnmanagedBits.GetSizeInBytesFor(copy.AllBits.Size));
+			}
+
+			return selectedBuffer;
 		}
 
 		public IList<long> Find(long transactionNumber, int numberOfFreePages)
