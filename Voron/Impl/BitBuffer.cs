@@ -16,7 +16,7 @@ namespace Voron.Impl
 
 		public BitBuffer(int* ptr, long numberOfPages)
 		{
-			AllBits = new UnmanagedBits(ptr, numberOfPages + numberOfPages, null);
+			AllBits = new UnmanagedBits(ptr, 1 + numberOfPages + numberOfPages, null);
 			Pages = new UnmanagedBits(ptr + 1, numberOfPages, null);
 			ModifiedPages = new UnmanagedBits(ptr + 1 + numberOfPages, numberOfPages, null);
 		}
@@ -26,6 +26,12 @@ namespace Voron.Impl
 		public UnmanagedBits Pages { get; set; }
 
 		public UnmanagedBits ModifiedPages { get; set; }
+
+		public bool IsDirty
+		{
+			get { return AllBits[0]; }
+			set { AllBits[0] = value; }
+		}
 
 		public IList<long> GetContinuousRangeOfFreePages(int numberOfPagesToGet)
 		{
