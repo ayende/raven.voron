@@ -5,7 +5,7 @@ namespace Voron.Impl
 	public interface IBufferProvider : IDisposable
 	{
 		void IncreaseSize(long size);
-		unsafe byte* GetBufferPointer();
+		unsafe int* GetBufferPointer();
 		void Release();
 	}
 }

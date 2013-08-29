@@ -14,11 +14,11 @@ namespace Voron.Tests.Impl
 		[Fact]
 		public void ShouldReturnEmptyRangeOfFreeBits()
 		{
-			var bytes = new byte[10];
+			var bytes = new int[BitBuffer.CalculateSizeForAllocation(10)];
 
 			unsafe
 			{
-				fixed (byte* ptr = bytes)
+				fixed (int* ptr = bytes)
 				{
 					var buffer = new BitBuffer(ptr, 10);
 
@@ -34,11 +34,11 @@ namespace Voron.Tests.Impl
 		[Fact]
 		public void ShouldReturnNextRangesOfFreeBits()
 		{
-			var bytes = new byte[10];
+			var bytes = new int[BitBuffer.CalculateSizeForAllocation(10)];
 
 			unsafe
 			{
-				fixed (byte* ptr = bytes)
+				fixed (int* ptr = bytes)
 				{
 					var buffer = new BitBuffer(ptr, 10);
 
@@ -77,11 +77,11 @@ namespace Voron.Tests.Impl
 		[Fact]
 		public void ShouldWorkInCycle()
 		{
-			var bytes = new byte[6];
+			var bytes = new int[BitBuffer.CalculateSizeForAllocation(6)];
 
 			unsafe
 			{
-				fixed (byte* ptr = bytes)
+				fixed (int* ptr = bytes)
 				{
 					var buffer = new BitBuffer(ptr, 6);
 

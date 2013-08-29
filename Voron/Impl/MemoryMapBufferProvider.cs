@@ -27,7 +27,7 @@ namespace Voron.Impl
 			fileStream.SetLength(size);
 		}
 
-		public byte* GetBufferPointer()
+		public int* GetBufferPointer()
 		{
 			mmf = MemoryMappedFile.CreateFromFile(fileStream, Guid.NewGuid().ToString(), fileStream.Length,
 													  MemoryMappedFileAccess.ReadWrite, null, HandleInheritability.None, true);
@@ -36,7 +36,7 @@ namespace Voron.Impl
 			byte* ptr = null;
 			accessor.SafeMemoryMappedViewHandle.AcquirePointer(ref ptr);
 
-			return ptr;
+			return (int *)ptr;
 		}
 
 		public void Release()

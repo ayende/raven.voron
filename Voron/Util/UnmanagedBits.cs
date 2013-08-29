@@ -8,9 +8,9 @@ namespace Voron.Util
         private readonly long _size;
         private readonly UnmanagedBits _pages;
 
-        public UnmanagedBits(byte* ptr, long size, UnmanagedBits pages)
+        public UnmanagedBits(int* ptr, long size, UnmanagedBits pages)
         {
-            _ptr = (int*)ptr;
+            _ptr = ptr;
             _size = size;
             _pages = pages;
         }
@@ -38,10 +38,18 @@ namespace Voron.Util
                     _pages[pos >> 12] = true;
 
                 if (value)
-                    _ptr[pos >> 5] |= (1 << (int)(pos & 31));
+                    _ptr[pos >> 5] |= (1 << (int)(pos & 31)); // '>> 5' is '/ 32', '& 31' is '% 32'
                 else
                     _ptr[pos >> 5] &= ~(1 << (int)(pos & 31));
             }
         }
+
+		public static long GetSizeInBytesToAllocate(long arraySize)
+		{
+			if (arraySize <= 0)
+				return 0;
+
+			return (arraySize - 1) / 32 + 1;
+		}
     }
 }

@@ -6,7 +6,6 @@
 
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Linq;
 using Voron.Util;
 
 namespace Voron.Impl
@@ -15,9 +14,9 @@ namespace Voron.Impl
 	{
 		internal long lastSearchPosition = 0;
 
-		public BitBuffer(byte* ptr, long numberOfPages)
+		public BitBuffer(int* ptr, long numberOfPages)
 		{
-			AllBits = new UnmanagedBits(ptr, CalculateSizeForAllocation(numberOfPages), null);
+			AllBits = new UnmanagedBits(ptr, numberOfPages + numberOfPages, null);
 			Pages = new UnmanagedBits(ptr + 1, numberOfPages, null);
 			ModifiedPages = new UnmanagedBits(ptr + 1 + numberOfPages, numberOfPages, null);
 		}
@@ -69,9 +68,12 @@ namespace Voron.Impl
 
 		public static long CalculateSizeForAllocation(long numberOfPages)
 		{
-			return 1 + // dirty
-			       numberOfPages + // pages
-			       numberOfPages; // modified pages
+			return UnmanagedBits.GetSizeInBytesToAllocate(
+				1 + // dirty bit
+				numberOfPages + // pages
+				numberOfPages); // modified pages
+
+
 		}
 	}
 }
