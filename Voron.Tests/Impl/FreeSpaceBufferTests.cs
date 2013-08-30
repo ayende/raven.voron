@@ -6,7 +6,6 @@
 
 using Voron.Impl;
 using Voron.Impl.FreeSpace;
-using Voron.Util;
 using Xunit;
 
 namespace Voron.Tests.Impl

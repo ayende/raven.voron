@@ -7,7 +7,6 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using Voron.Util;
 
 namespace Voron.Impl.FreeSpace
 {
@@ -40,66 +39,5 @@ namespace Voron.Impl.FreeSpace
 			set { AllBits[0] = value; }
 		}
 
-		public IList<long> Find(int numberOfFreePages)
-		{
-			var result = GetContinuousRangeOfFreePages(numberOfFreePages);
-
-			if (result != null)
-			{
-				foreach (var freePageNumber in result)
-				{
-					SetPage(freePageNumber, false); // mark returned pages as busy
-				}
-			}
-
-			return result;
-		}
-
-		internal IList<long> GetContinuousRangeOfFreePages(int numberOfPagesToGet)
-		{
-			Debug.Assert(numberOfPagesToGet > 0);
-
-			var range = new List<long>();
-
-			if (lastSearchPosition >= FreePages.Size)
-				lastSearchPosition = 0;
-
-			var page = lastSearchPosition;
-
-			for (; page < FreePages.Size; page++)
-			{
-				if (FreePages[page]) // free page
-				{
-					if (range.Count == 0 || range[range.Count - 1] == page - 1) // when empty or continuous
-					{
-						range.Add(page);
-
-						if (range.Count == numberOfPagesToGet)
-						{
-							page++; // next time start searching from a next page
-							break;
-						}
-
-						continue; // continue looking for next free page in continuous range
-					}
-				}
-
-				range.Clear();
-			}
-
-			lastSearchPosition = page;
-
-			Debug.Assert(range.Count <= numberOfPagesToGet);
-
-			return range.Count == numberOfPagesToGet ? range : null;
-		}
-
-		public static long CalculateSizeInBytesForAllocation(long numberOfPages)
-		{
-			return UnmanagedBits.GetSizeInBytesFor(
-				1 + // dirty bit
-				numberOfPages + // pages
-				Math.Min(1, numberOfPages / 4096)); // modified pages
-		}
 	}
 }

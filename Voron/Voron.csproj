@@ -46,6 +46,7 @@
     <Compile Include="Debugging\EnvironmentStats.cs" />
     <Compile Include="Exceptions\ConcurrencyException.cs" />
     <Compile Include="Impl\AbstractPager.cs" />
+    <Compile Include="Impl\FreeSpace\BinaryFreeSpaceStrategy.cs" />
     <Compile Include="Impl\FreeSpace\FreeSpaceBuffer.cs" />
     <Compile Include="Impl\ConsecutiveSequences.cs" />
     <Compile Include="Impl\Constants.cs" />
@@ -62,7 +63,6 @@
     <Compile Include="Impl\FreeSpace\MemoryMapBufferProvider.cs" />
     <Compile Include="Impl\MemoryMapPager.cs" />
     <Compile Include="Impl\PagerState.cs" />
-    <Compile Include="Impl\FreeSpace\PagesBits.cs" />
     <Compile Include="Impl\PureMemoryPager.cs" />
     <Compile Include="Impl\SnapshotReader.cs" />
     <Compile Include="Impl\TransactionMergingWriter.cs" />
@@ -94,7 +94,7 @@
     <Compile Include="Trees\TreeDataInTransaction.cs" />
     <Compile Include="Trees\TreeMutableState.cs" />
     <Compile Include="Trees\TreeRebalancer.cs" />
-    <Compile Include="Util\UnmanagedBits.cs" />
+    <Compile Include="Impl\FreeSpace\UnmanagedBits.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
