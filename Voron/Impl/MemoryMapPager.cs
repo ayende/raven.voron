@@ -22,9 +22,9 @@ namespace Voron.Impl
 		{
 			_flushMode = flushMode;
 			var fileInfo = new FileInfo(file);
-			var hasData = fileInfo.Exists == false || fileInfo.Length == 0;
+			var noData = fileInfo.Exists == false || fileInfo.Length == 0;
 			_fileStream = fileInfo.Open(FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.Read);
-			if (hasData)
+			if (noData)
 			{
 				NumberOfAllocatedPages = 0;
 			}
