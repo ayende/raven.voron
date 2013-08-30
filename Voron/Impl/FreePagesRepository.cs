@@ -7,6 +7,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using Voron.Util;
 
 namespace Voron.Impl
@@ -62,19 +63,37 @@ namespace Voron.Impl
 
 		public BitBuffer GetBufferForTransaction(long transactionNumber)
 		{
-			var selectedBuffer = Buffers[transactionNumber & 1];
+			var indexOfBuffer = transactionNumber & 1;
 
-			if (selectedBuffer.IsDirty)
+			var selected = Buffers[indexOfBuffer];
+			var reference = Buffers[1 - indexOfBuffer];
+
+			if (selected.IsDirty)
 			{
-				var copy = Buffers[(transactionNumber + 1) & 1];
-				
-				Debug.Assert(selectedBuffer.AllBits.Size == copy.AllBits.Size);
+				if (reference.IsDirty)
+					throw new InvalidDataException(
+						"Both buffers are dirty. Valid state of the free pages buffer cannot be restored. Transaction number: " +
+						transactionNumber); // should never happen
 
-				NativeMethods.memcpy((byte*) selectedBuffer.Ptr, (byte*) copy.Ptr,
-				                     (int) UnmanagedBits.GetSizeInBytesFor(copy.AllBits.Size));
+				Debug.Assert(selected.AllBits.Size == reference.AllBits.Size);
+
+				NativeMethods.memcpy((byte*) selected.AllBits.Ptr, (byte*) reference.AllBits.Ptr,
+				                     (int) UnmanagedBits.GetSizeInBytesFor(reference.AllBits.Size));
+			}
+			else
+			{
+				Debug.Assert(selected.ModifiedPages.Size == reference.ModifiedPages.Size);
+
+				for (int i = 0; i < reference.ModifiedPages.Size; i++)
+				{
+					if (reference.ModifiedPages[i])
+					{
+						selected.Pages[i] = true;
+					}
+				}
 			}
 
-			return selectedBuffer;
+			return selected;
 		}
 
 		public IList<long> Find(long transactionNumber, int numberOfFreePages)

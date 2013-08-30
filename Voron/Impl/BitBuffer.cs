@@ -19,8 +19,6 @@ namespace Voron.Impl
 			AllBits = new UnmanagedBits(ptr, 1 + numberOfPages + numberOfPages, null);
 			Pages = new PagesBits(AllBits, 1, numberOfPages);
 			ModifiedPages = new PagesBits(AllBits, 1 + numberOfPages, numberOfPages);
-
-			Ptr = ptr;
 		}
 
 		public UnmanagedBits AllBits { get; private set; }
@@ -28,8 +26,6 @@ namespace Voron.Impl
 		public PagesBits Pages { get; private set; }
 
 		public PagesBits ModifiedPages { get; set; }
-
-		public int* Ptr { get; private set; }
 
 		public bool IsDirty
 		{

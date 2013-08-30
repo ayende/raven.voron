@@ -20,6 +20,11 @@ namespace Voron.Util
 			get { return _size; }
 	    }
 
+	    public int* Ptr
+	    {
+			get { return _ptr; }
+	    }
+
         public bool this[long pos]
         {
             get

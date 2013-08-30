@@ -239,9 +239,9 @@ namespace Voron.Tests.Impl
 				freePages.Add(tx1, 1);
 				freePages.Add(tx1, 3);
 
-				freePages.Add(tx1, 4);
-				freePages.Add(tx1, 7);
-				freePages.Add(tx1, 9);
+				freePages.Add(tx2, 4);
+				freePages.Add(tx2, 7);
+				freePages.Add(tx2, 9);
 
 				var buffer1 = freePages.GetBufferForTransaction(tx1);
 				var buffer2 = freePages.GetBufferForTransaction(tx2);
@@ -258,6 +258,26 @@ namespace Voron.Tests.Impl
 				{
 					Assert.Equal(buffer1.Pages[i], buffer2.Pages[i]);
 				}
+			}
+		}
+
+		[Fact]
+		public void WhenBufferIsCleanShouldCopyModifiedPagesFromSecondBufferBeforeCanProcess()
+		{
+			using (var freePages = new FreePagesRepository("free-space", 10))
+			{
+				var tx1 = 1;
+				var tx2 = 2;
+
+				freePages.SetModified(tx2, 0);
+				freePages.SetModified(tx2, 3);
+				freePages.SetModified(tx2, 9);
+
+				var buffer = freePages.GetBufferForTransaction(tx1);
+
+				Assert.True(buffer.Pages[0]);
+				Assert.True(buffer.Pages[3]);
+				Assert.True(buffer.Pages[9]);
 			}
 		}
 
