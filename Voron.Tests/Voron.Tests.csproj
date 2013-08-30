@@ -51,7 +51,7 @@
   <ItemGroup>
     <Compile Include="Impl\FreeSpaceBufferTests.cs" />
     <Compile Include="Impl\ConsecutiveSequencesTests.cs" />
-    <Compile Include="Impl\FreeSpaceBuffersTests.cs" />
+    <Compile Include="Impl\BinaryFreeSpaceTests.cs" />
     <Compile Include="MultiValueTree.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Storage\Batches.cs" />

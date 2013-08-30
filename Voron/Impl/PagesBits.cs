@@ -32,18 +32,13 @@ namespace Voron.Impl
 
 				return unmanaged[startIndex + pos];
 			}
-			set
+			internal set
 			{
 				if (pos < 0 || pos >= Size)
 					throw new ArgumentOutOfRangeException("pos");
 
 				unmanaged[startIndex + pos] = value;
 			}
-		}
-
-		public void Set(long pos)
-		{
-			this[pos] = true;
 		}
 
 		public void Clear()

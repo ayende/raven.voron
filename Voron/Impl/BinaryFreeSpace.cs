@@ -75,7 +75,7 @@ namespace Voron.Impl
 				{
 					if (reference.ModifiedPages[i])
 					{
-						current.FreePages.Set(i);
+						current.FreePages[i] = reference.FreePages[i];
 					}
 				}
 			}

@@ -27,6 +27,12 @@ namespace Voron.Impl
 
 		public PagesBits ModifiedPages { get; set; }
 
+		public void SetFreePage(long pageNumber)
+		{
+			FreePages[pageNumber] = true;
+			ModifiedPages[pageNumber] = true;
+		}
+
 		public bool IsDirty
 		{
 			get { return AllBits[0]; }
@@ -41,11 +47,17 @@ namespace Voron.Impl
 			{
 				foreach (var freePageNumber in result)
 				{
-					FreePages[freePageNumber] = false; // mark returned pages as busy
+					SetBusyPage(freePageNumber); // mark returned pages as busy
 				}
 			}
 
 			return result;
+		}
+
+		private void SetBusyPage(long pageNumber)
+		{
+			FreePages[pageNumber] = false;
+			ModifiedPages[pageNumber] = true;
 		}
 
 		internal IList<long> GetContinuousRangeOfFreePages(int numberOfPagesToGet)
