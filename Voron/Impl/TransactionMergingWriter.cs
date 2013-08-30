@@ -4,6 +4,7 @@
 	using System.Collections.Concurrent;
 	using System.Collections.Generic;
 	using System.Diagnostics;
+	using System.IO;
 	using System.Linq;
 	using System.Threading;
 	using System.Threading.Tasks;
@@ -122,11 +123,19 @@
 					switch (operation.Type)
 					{
 						case WriteBatch.BatchOperationType.Add:
-							tree.Add(tx, operation.Key, operation.Value);
+							tree.Add(tx, operation.Key, operation.Value as Stream, operation.Version);
 							break;
 						case WriteBatch.BatchOperationType.Delete:
-							tree.Delete(tx, operation.Key);
+							tree.Delete(tx, operation.Key, operation.Version);
 							break;
+						case WriteBatch.BatchOperationType.MultiAdd:
+							tree.MultiAdd(tx, operation.Key, operation.Value as Slice, operation.Version);
+							break;
+						case WriteBatch.BatchOperationType.MultiDelete:
+							tree.MultiDelete(tx, operation.Key, operation.Value as Slice, operation.Version);
+							break;
+						default:
+							throw new ArgumentOutOfRangeException();
 					}
 				}
 			}
@@ -185,7 +194,7 @@
 			if (treeName == null)
 				return _env.Root;
 
-			return _env.GetTree(treeName);
+			return _env.GetTree(null, treeName);
 		}
 
 		private class OutstandingWrite

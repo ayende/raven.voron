@@ -44,6 +44,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Debugging\EnvironmentStats.cs" />
+    <Compile Include="Exceptions\ConcurrencyException.cs" />
     <Compile Include="Impl\AbstractPager.cs" />
     <Compile Include="Impl\FreeSpaceBuffer.cs" />
     <Compile Include="Impl\ConsecutiveSequences.cs" />
@@ -66,6 +67,7 @@
     <Compile Include="Impl\SnapshotReader.cs" />
     <Compile Include="Impl\TransactionMergingWriter.cs" />
     <Compile Include="Impl\WriteBatch.cs" />
+    <Compile Include="ReadResult.cs" />
     <Compile Include="TransactionFlags.cs" />
     <Compile Include="Trees\Cursor.cs" />
     <Compile Include="Debugging\DebugStuff.cs" />
