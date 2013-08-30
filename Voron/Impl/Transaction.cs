@@ -133,7 +133,7 @@ namespace Voron.Impl
 			if (page == null) // allocate from end of file
 			{
 				if (num > 1)
-					_pager.EnsureContinious(this, NextPageNumber, num);
+					_pager.EnsureContinuous(this, NextPageNumber, num);
 				page = _pager.Get(this, NextPageNumber);
 				page.PageNumber = NextPageNumber;
 				NextPageNumber += num;

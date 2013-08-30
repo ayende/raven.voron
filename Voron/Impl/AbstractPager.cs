@@ -42,7 +42,7 @@ namespace Voron.Impl
             {
                 throw new InvalidOperationException("Cannot increase size of the pager when errorOnChange is set to true");
             }
-            EnsureContinious(tx, n, 1);
+            EnsureContinuous(tx, n, 1);
             return Get(n);
         }
 
@@ -59,7 +59,7 @@ namespace Voron.Impl
             return state;
         }
 
-        public virtual void EnsureContinious(Transaction tx, long requestedPageNumber, int pageCount)
+        public virtual void EnsureContinuous(Transaction tx, long requestedPageNumber, int pageCount)
         {
             if (requestedPageNumber + pageCount <= NumberOfAllocatedPages)
                 return;
