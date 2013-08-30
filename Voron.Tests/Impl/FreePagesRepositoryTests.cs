@@ -7,7 +7,6 @@
 using System;
 using System.IO;
 using Voron.Impl;
-using Voron.Util;
 using Xunit;
 
 namespace Voron.Tests.Impl
@@ -242,6 +241,7 @@ namespace Voron.Tests.Impl
 
 				freePages.Add(tx1, 4);
 				freePages.Add(tx1, 7);
+				freePages.Add(tx1, 9);
 
 				var buffer1 = freePages.GetBufferForTransaction(tx1);
 				var buffer2 = freePages.GetBufferForTransaction(tx2);
@@ -254,11 +254,10 @@ namespace Voron.Tests.Impl
 				Assert.Equal(buffer1.AllBits.Size, buffer2.AllBits.Size);
 
 
-				for (int i = 0; i < buffer1.AllBits.Size; i++)
+				for (int i = 0; i < buffer1.Pages.Size; i++)
 				{
 					Assert.Equal(buffer1.Pages[i], buffer2.Pages[i]);
 				}
-
 			}
 		}
 
