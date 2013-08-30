@@ -261,6 +261,25 @@ namespace Voron.Tests.Impl
 			}
 		}
 
+		[Fact]
+		public void CanSetPageAsModified()
+		{
+			using (var freePages = new FreePagesRepository("free-space", 10))
+			{
+				var tx = 1;
+
+				freePages.SetModified(tx, 1);
+				freePages.SetModified(tx, 5);
+				freePages.SetModified(tx, 6);
+
+				var buffer = freePages.GetBufferForTransaction(tx);
+
+				Assert.True(buffer.ModifiedPages[1]);
+				Assert.True(buffer.ModifiedPages[5]);
+				Assert.True(buffer.ModifiedPages[6]);
+			}
+		}
+
 		private void DeleteFiles()
 		{
 			if (File.Exists("free-space-0"))

@@ -54,6 +54,12 @@ namespace Voron.Impl
 			buffer.Pages[pageNumber] = true;
 		}
 
+		public void SetModified(long transactionNumber, long pageNumber)
+		{
+			var buffer = GetBufferForTransaction(transactionNumber);
+			buffer.ModifiedPages[pageNumber] = true;
+		}
+
 		public BitBuffer GetBufferForTransaction(long transactionNumber)
 		{
 			var selectedBuffer = Buffers[transactionNumber & 1];
