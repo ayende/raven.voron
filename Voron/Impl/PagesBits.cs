@@ -40,5 +40,18 @@ namespace Voron.Impl
 				unmanaged[startIndex + pos] = value;
 			}
 		}
+
+		public void Set(long pos)
+		{
+			this[pos] = true;
+		}
+
+		public void Clear()
+		{
+			for (var i = 0; i < Size; i++)
+			{
+				this[i] = false;
+			}
+		}
 	}
 }

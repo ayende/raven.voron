@@ -10,7 +10,7 @@ using Xunit;
 
 namespace Voron.Tests.Impl
 {
-	public unsafe class BitBufferTests
+	public unsafe class FreeSpaceBufferTests
 	{
 		private int[] AllocateMemoryForBitBuffer(long numberOfPages)
 		{
@@ -18,15 +18,15 @@ namespace Voron.Tests.Impl
 		}
 
 		[Fact]
-		public void BitBufferConstructor()
+		public void FreeSpaceBufferConstructor()
 		{
 			var bytes = AllocateMemoryForBitBuffer(10);
 
 			fixed (int* ptr = bytes)
 			{
-				var buffer = new BitBuffer(ptr, 10);
+				var buffer = new FreeSpaceBuffer(ptr, 10);
 
-				buffer.Pages[0] = true;
+				buffer.FreePages[0] = true;
 
 				Assert.True(buffer.AllBits[1]);
 			}
@@ -39,7 +39,7 @@ namespace Voron.Tests.Impl
 
 			fixed (int* ptr = bytes)
 			{
-				var buffer = new BitBuffer(ptr, 10);
+				var buffer = new FreeSpaceBuffer(ptr, 10);
 
 				var freePages = buffer.GetContinuousRangeOfFreePages(1);
 
@@ -56,9 +56,9 @@ namespace Voron.Tests.Impl
 
 			fixed (int* ptr = bytes)
 			{
-				var buffer = new BitBuffer(ptr, 10);
+				var buffer = new FreeSpaceBuffer(ptr, 10);
 
-				var bits = buffer.Pages;
+				var bits = buffer.FreePages;
 
 				bits[0] = true;
 				bits[1] = true;
@@ -96,9 +96,9 @@ namespace Voron.Tests.Impl
 
 			fixed (int* ptr = bytes)
 			{
-				var buffer = new BitBuffer(ptr, 6);
+				var buffer = new FreeSpaceBuffer(ptr, 6);
 
-				var bits = buffer.Pages;
+				var bits = buffer.FreePages;
 
 				bits[0] = false;
 				bits[1] = false;
@@ -137,7 +137,7 @@ namespace Voron.Tests.Impl
 
 			fixed (int* ptr = bytes)
 			{
-				var buffer = new BitBuffer(ptr, 1);
+				var buffer = new FreeSpaceBuffer(ptr, 1);
 				Assert.False(buffer.IsDirty);
 			}
 		}
@@ -149,7 +149,7 @@ namespace Voron.Tests.Impl
 
 			fixed (int* ptr = bytes)
 			{
-				var buffer = new BitBuffer(ptr, 1);
+				var buffer = new FreeSpaceBuffer(ptr, 1);
 
 				buffer.IsDirty = true;
 
