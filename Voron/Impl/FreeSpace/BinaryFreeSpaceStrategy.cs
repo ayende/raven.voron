@@ -10,6 +10,12 @@ namespace Voron.Impl.FreeSpace
 		private UnmanagedBits _current;
 		private long _lastSearchPosition;
 
+		public decimal MaxNumberOfPages
+		{
+			get { throw new System.NotImplementedException(); }
+			set { throw new System.NotImplementedException(); }
+		}
+
 		public void SetBufferForTransaction(long transactionNumber)
 		{
 			var indexOfBuffer = transactionNumber & 1;
@@ -40,7 +46,7 @@ namespace Voron.Impl.FreeSpace
 			_current = next;
 		}
 
-		public long Find(int numberOfFreePages)
+		public long Find(long numberOfFreePages)
 		{
 			var result = GetContinuousRangeOfFreePages(numberOfFreePages);
 
@@ -55,14 +61,14 @@ namespace Voron.Impl.FreeSpace
 			return result;
 		}
 
-		private long GetContinuousRangeOfFreePages(int numberOfPagesToGet)
+		private long GetContinuousRangeOfFreePages(long numberOfPagesToGet)
 		{
 			Debug.Assert(numberOfPagesToGet > 0);
 
 			var searched = 0;
 
 			long rangeStart = -1;
-			var rangeSize = 0;
+			long rangeSize = 0;
 			while (searched < _current.NumberOfTrackedPages)
 			{
 				searched++;
@@ -94,6 +100,15 @@ namespace Voron.Impl.FreeSpace
 			Debug.Assert(rangeSize == numberOfPagesToGet);
 
 			return rangeStart;
+		}
+
+		public void MoveTo(long fst, long snd, int pageCount, long actualSize)
+		{
+			throw new System.NotImplementedException(); 
+			// here we need to copy the old values to the new values
+			// note that:
+			// actual page size & actual size will be tracked in the file header, along with the page numbers
+			// of the 1st & 2nd free space ranges
 		}
 	}
 }

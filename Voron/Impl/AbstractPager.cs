@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
+using Voron.Impl.FreeSpace;
 using Voron.Trees;
 
 namespace Voron.Impl
@@ -8,7 +9,6 @@ namespace Voron.Impl
     public unsafe abstract class AbstractPager : IVirtualPager
     {
         protected const int MinIncreaseSize = 1 * 1024 * 1024;
-        protected const int MaxIncreaseSize = 256 * 1024 * 1024;
 
         private long _increaseSize = MinIncreaseSize;
         private DateTime _lastIncrease;
@@ -74,9 +74,53 @@ namespace Voron.Impl
             }
 
             AllocateMorePages(tx, allocationSize);
+
+	        EnsureFreeSpaceTrackingHasEnoughSpace(tx, pageCount);
         }
 
-        public virtual void Dispose()
+	    private void EnsureFreeSpaceTrackingHasEnoughSpace(Transaction tx, int pageCount)
+	    {
+		    if (tx.Environment.FreeSpaceHandling.MaxNumberOfPages >= NumberOfAllocatedPages)
+			    return;
+
+		    var requiredSize = UnmanagedBits.CalculateSizeInBytesForAllocation(NumberOfAllocatedPages, PageSize)*2;
+
+			// we always allocate twice as much as we actually need, because we don't 
+
+		    // we request twice because it would likely be easier to find two smaller pieces than one big piece
+		    var firstBufferPageStart = tx.Environment.FreeSpaceHandling.Find(requiredSize);
+		    var secondBufferPageStart = tx.Environment.FreeSpaceHandling.Find(requiredSize);
+
+		    // this is a bit of a hack, because we modify the NextPageNumber just before
+		    // the tx is going to modify it, too.
+		    // However, this is currently safe because the tx will just add to its current value
+		    // so we can do that. However, note that we need to skip the range that it is _currently_
+		    // allocating
+		    if (firstBufferPageStart == -1)
+		    {
+			    firstBufferPageStart = tx.NextPageNumber + pageCount;
+			    pageCount = 0;
+			    tx.NextPageNumber += requiredSize;
+		    }
+		    if (secondBufferPageStart == -1)
+		    {
+			    secondBufferPageStart = tx.NextPageNumber + pageCount;
+			    tx.NextPageNumber += requiredSize;
+		    }
+
+		    if (tx.NextPageNumber >= NumberOfAllocatedPages)
+			    throw new InvalidOperationException(
+				    "BUG, cannot find space for free space during file growth because the required size was too big even after the re-growth");
+
+		    tx.Environment.FreeSpaceHandling.MoveTo(
+			    firstBufferPageStart,
+			    secondBufferPageStart,
+				pageCount,
+			    requiredSize
+			    );
+	    }
+
+	    public virtual void Dispose()
         {
             if (_tempPage != IntPtr.Zero)
             {
@@ -105,7 +149,7 @@ namespace Voron.Impl
             TimeSpan timeSinceLastIncrease = (now - _lastIncrease);
             if (timeSinceLastIncrease.TotalSeconds < 30)
             {
-                _increaseSize = Math.Min(_increaseSize * 2, MaxIncreaseSize);
+	            _increaseSize = Math.Min(_increaseSize*2, current + current/4);
             }
             else if (timeSinceLastIncrease.TotalMinutes > 2)
             {
@@ -123,6 +167,10 @@ namespace Voron.Impl
             // eager to reserve space
             current = Math.Max(current, 256 * PageSize);
             var actualIncrease = Math.Min(_increaseSize, current / 4);
+
+			// TODO: Need to take into account size of free space allocation, if we need to re-allocate free space
+	        tx.Environment.FreeSpaceHandling.MaxNumberOfPages();
+
             return current + actualIncrease;
         }
     }

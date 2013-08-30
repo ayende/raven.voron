@@ -7,6 +7,7 @@ using System.Threading;
 using Voron.Debugging;
 using Voron.Impl;
 using Voron.Impl.FileHeaders;
+using Voron.Impl.FreeSpace;
 using Voron.Trees;
 
 namespace Voron
@@ -124,6 +125,8 @@ namespace Voron
 		{
 			get { return _pager.PageSize; }
 		}
+
+		public BinaryFreeSpaceStrategy FreeSpaceHandling { get; set; }
 
 		public Tree GetTree(Transaction tx, string name)
 		{

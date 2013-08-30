@@ -74,28 +74,17 @@ namespace Voron.Impl.FreeSpace
 			return (ptr[pos >> 5] & (1 << (int)(pos & 31))) != 0;
 		}
 
-		public long CalculateSizeInBytesForAllocation(long numberOfPages)
+		public static long CalculateSizeInBytesForAllocation(long numberOfPages, int pageSize)
 		{
 			return GetSizeInBytesFor(
 				sizeof(int) + // dirty bit - but need it aligned
 				numberOfPages + // pages
-				Math.Min(1, numberOfPages / _pageSize)); // modified pages
+				Math.Min(1, numberOfPages / pageSize)); // modified pages
 		}
 
-		public static long GetSizeOfIntArrayFor(long numberOfBits)
+		private static long GetSizeInBytesFor(long numberOfBits)
 		{
-			if (numberOfBits <= 0)
-				return 0;
-
-			return (numberOfBits - 1) / 32 + 1;
-		}
-
-		public static long GetSizeInBytesFor(long numberOfBits)
-		{
-			if (numberOfBits <= 0)
-				return 0;
-
-			return sizeof(int) * GetSizeOfIntArrayFor(numberOfBits);
+			return sizeof(int) * ((numberOfBits - 1) / 32 + 1);
 		}
 
 		public void CopyAllTo(UnmanagedBits other)
