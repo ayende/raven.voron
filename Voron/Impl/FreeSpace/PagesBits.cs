@@ -7,7 +7,7 @@
 using System;
 using Voron.Util;
 
-namespace Voron.Impl
+namespace Voron.Impl.FreeSpace
 {
 	public class PagesBits
 	{

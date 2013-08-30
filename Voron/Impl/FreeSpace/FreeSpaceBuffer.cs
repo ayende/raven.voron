@@ -4,11 +4,12 @@
 //  </copyright>
 // -----------------------------------------------------------------------
 
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using Voron.Util;
 
-namespace Voron.Impl
+namespace Voron.Impl.FreeSpace
 {
 	public unsafe class FreeSpaceBuffer
 	{
@@ -16,9 +17,9 @@ namespace Voron.Impl
 
 		public FreeSpaceBuffer(int* ptr, long numberOfPages)
 		{
-			AllBits = new UnmanagedBits(ptr, 1 + numberOfPages + numberOfPages, null);
+			AllBits = new UnmanagedBits(ptr, 1 + numberOfPages + Math.Min(1, numberOfPages / 4096));
 			FreePages = new PagesBits(AllBits, 1, numberOfPages);
-			ModifiedPages = new PagesBits(AllBits, 1 + numberOfPages, numberOfPages);
+			ModifiedPages = new PagesBits(AllBits, numberOfPages, Math.Min(1, numberOfPages / 4096));
 		}
 
 		public UnmanagedBits AllBits { get; private set; }
@@ -27,10 +28,10 @@ namespace Voron.Impl
 
 		public PagesBits ModifiedPages { get; set; }
 
-		public void SetFreePage(long pageNumber)
+		public void SetPage(long pageNumber, bool free)
 		{
-			FreePages[pageNumber] = true;
-			ModifiedPages[pageNumber] = true;
+			FreePages[pageNumber] = free;
+			ModifiedPages[pageNumber / 4096] = true;
 		}
 
 		public bool IsDirty
@@ -47,17 +48,11 @@ namespace Voron.Impl
 			{
 				foreach (var freePageNumber in result)
 				{
-					SetBusyPage(freePageNumber); // mark returned pages as busy
+					SetPage(freePageNumber, false); // mark returned pages as busy
 				}
 			}
 
 			return result;
-		}
-
-		private void SetBusyPage(long pageNumber)
-		{
-			FreePages[pageNumber] = false;
-			ModifiedPages[pageNumber] = true;
 		}
 
 		internal IList<long> GetContinuousRangeOfFreePages(int numberOfPagesToGet)
@@ -104,7 +99,7 @@ namespace Voron.Impl
 			return UnmanagedBits.GetSizeInBytesFor(
 				1 + // dirty bit
 				numberOfPages + // pages
-				numberOfPages); // modified pages
+				Math.Min(1, numberOfPages / 4096)); // modified pages
 		}
 	}
 }

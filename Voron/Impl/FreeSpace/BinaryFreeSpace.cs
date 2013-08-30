@@ -9,7 +9,7 @@ using System.Diagnostics;
 using System.IO;
 using Voron.Util;
 
-namespace Voron.Impl
+namespace Voron.Impl.FreeSpace
 {
 	public unsafe class BinaryFreeSpace : IDisposable
 	{

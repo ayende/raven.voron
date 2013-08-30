@@ -21,7 +21,7 @@ namespace Voron.Tests.Util
 			{
 				fixed (int* ptr = bytes)
 				{
-					var bits = new UnmanagedBits(ptr, 128, null);
+					var bits = new UnmanagedBits(ptr, 128);
 
 					var modeFactor = new Random().Next(1, 7);
 

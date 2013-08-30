@@ -6,13 +6,11 @@ namespace Voron.Util
     {
         private readonly int* _ptr;
         private readonly long _size;
-        private readonly UnmanagedBits _pages;
 
-        public UnmanagedBits(int* ptr, long size, UnmanagedBits pages)
+        public UnmanagedBits(int* ptr, long size)
         {
             _ptr = ptr;
             _size = size;
-            _pages = pages;
         }
 
 	    public long Size
@@ -38,9 +36,6 @@ namespace Voron.Util
             {
                 if (pos < 0 || pos >= _size)
                     throw new ArgumentOutOfRangeException("pos");
-
-                if (_pages != null)
-                    _pages[pos >> 12] = true;
 
                 if (value)
                     _ptr[pos >> 5] |= (1 << (int)(pos & 31)); // '>> 5' is '/ 32', '& 31' is '% 32'

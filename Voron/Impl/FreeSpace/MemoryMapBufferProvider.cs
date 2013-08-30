@@ -8,7 +8,7 @@ using System;
 using System.IO;
 using System.IO.MemoryMappedFiles;
 
-namespace Voron.Impl
+namespace Voron.Impl.FreeSpace
 {
 	public unsafe class MemoryMapBufferProvider : IBufferProvider
 	{

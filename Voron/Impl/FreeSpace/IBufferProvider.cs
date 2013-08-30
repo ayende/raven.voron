@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace Voron.Impl
+namespace Voron.Impl.FreeSpace
 {
 	public interface IBufferProvider : IDisposable
 	{

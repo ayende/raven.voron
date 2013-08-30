@@ -7,6 +7,7 @@
 using System;
 using System.IO;
 using Voron.Impl;
+using Voron.Impl.FreeSpace;
 using Xunit;
 
 namespace Voron.Tests.Impl
@@ -35,8 +36,8 @@ namespace Voron.Tests.Impl
 
 				var buffer = freeSpace.GetBufferForTransaction(transactionNumber);
 
-				buffer.SetFreePage(1);
-				buffer.SetFreePage(3);
+				buffer.SetPage(1, true);
+				buffer.SetPage(3, true);
 
 				Assert.Equal(buffer.FreePages[0], false);
 				Assert.Equal(buffer.FreePages[1], true);
@@ -55,10 +56,10 @@ namespace Voron.Tests.Impl
 				var buffer3 = freeSpace.GetBufferForTransaction(2);
 				var buffer4 = freeSpace.GetBufferForTransaction(3);
 
-				buffer1.SetFreePage(0);
-				buffer2.SetFreePage(1);
-				buffer3.SetFreePage(2);
-				buffer4.SetFreePage(3); 
+				buffer1.SetPage(0, true);
+				buffer2.SetPage(1, true);
+				buffer3.SetPage(2, true);
+				buffer4.SetPage(3, true); 
 
 				Assert.Equal(freeSpace.Buffers[0].FreePages[0], true);
 				Assert.Equal(freeSpace.Buffers[0].FreePages[1], false);
@@ -92,8 +93,8 @@ namespace Voron.Tests.Impl
 
 				var buffer = freeSpace.GetBufferForTransaction(transaction);
 
-				buffer.SetFreePage(0);
-				buffer.SetFreePage(1);
+				buffer.SetPage(0, true);
+				buffer.SetPage(1, true);
 
 				var numbersOfFreePages = buffer.Find(2);
 
@@ -112,8 +113,8 @@ namespace Voron.Tests.Impl
 
 				var buffer = freeSpace.GetBufferForTransaction(transaction);
 
-				buffer.SetFreePage(2);
-				buffer.SetFreePage(3);
+				buffer.SetPage(2, true);
+				buffer.SetPage(3, true);
 
 				var numbersOfFreePages = buffer.Find(2);
 
@@ -132,8 +133,8 @@ namespace Voron.Tests.Impl
 
 				var buffer = freeSpace.GetBufferForTransaction(transaction);
 
-				buffer.SetFreePage(1);
-				buffer.SetFreePage(2);
+				buffer.SetPage(1, true);
+				buffer.SetPage(2, true);
 
 				var numbersOfFreePages = buffer.Find(2);
 
@@ -152,9 +153,9 @@ namespace Voron.Tests.Impl
 
 				var buffer = freePages.GetBufferForTransaction(transaction);
 
-				buffer.SetFreePage(4);
-				buffer.SetFreePage(5);
-				buffer.SetFreePage(6);
+				buffer.SetPage(4, true);
+				buffer.SetPage(5, true);
+				buffer.SetPage(6, true);
 
 				buffer.Find(2);
 
@@ -175,15 +176,15 @@ namespace Voron.Tests.Impl
 
 				var buffer = freePages.GetBufferForTransaction(transaction);
 
-				buffer.SetFreePage(5);
-				buffer.SetFreePage(1);
+				buffer.SetPage(5, true);
+				buffer.SetPage(1, true);
 
-				buffer.SetFreePage(4);
-				buffer.SetFreePage(5);
+				buffer.SetPage(4, true);
+				buffer.SetPage(5, true);
 
-				buffer.SetFreePage(7);
-				buffer.SetFreePage(8);
-				buffer.SetFreePage(9);
+				buffer.SetPage(7, true);
+				buffer.SetPage(8, true);
+				buffer.SetPage(9, true);
 
 				var numbersOfFreePages = buffer.Find(2);
 
@@ -213,8 +214,8 @@ namespace Voron.Tests.Impl
 
 				var buffer = freePages.GetBufferForTransaction(transaction);
 
-				buffer.SetFreePage(2);
-				buffer.SetFreePage(3);
+				buffer.SetPage(2, true);
+				buffer.SetPage(3, true);
 
 				// 2 pages are free but we request for 3
 				var numbersOfFreePages = buffer.Find(3);
@@ -232,16 +233,16 @@ namespace Voron.Tests.Impl
 
 				var buffer = freePages.GetBufferForTransaction(transaction);
 
-				buffer.SetFreePage(7);
-				buffer.SetFreePage(8);
-				buffer.SetFreePage(9);
+				buffer.SetPage(7, true);
+				buffer.SetPage(8, true);
+				buffer.SetPage(9, true);
 
 				var numbersOfFreePages = buffer.Find(1); // move searching index
 
 				Assert.Equal(1, numbersOfFreePages.Count);
 				Assert.Equal(7, numbersOfFreePages[0]);
 
-				buffer.SetFreePage(0); // free page 0
+				buffer.SetPage(0, true); // free page 0
 
 				numbersOfFreePages = buffer.Find(3);
 				Assert.Null(numbersOfFreePages);
@@ -257,13 +258,13 @@ namespace Voron.Tests.Impl
 				var tx2 = 2;
 
 				var buffer1 = freePages.GetBufferForTransaction(tx1);
-				buffer1.SetFreePage(1);
-				buffer1.SetFreePage(3);
+				buffer1.SetPage(1, true);
+				buffer1.SetPage(3, true);
 
 				var buffer2 = freePages.GetBufferForTransaction(tx2);
-				buffer2.SetFreePage(4);
-				buffer2.SetFreePage(7);
-				buffer2.SetFreePage(9);
+				buffer2.SetPage(4, true);
+				buffer2.SetPage(7, true);
+				buffer2.SetPage(9, true);
 
 				buffer1.IsDirty = true; // force as dirty so next get should return a clean buffer which will be a copy of a second buffer
 
@@ -289,13 +290,13 @@ namespace Voron.Tests.Impl
 
 				var buffer1 = freePages.GetBufferForTransaction(tx1);
 
-				buffer1.SetFreePage(0);
+				buffer1.SetPage(0, true);
 
 				var buffer2 = freePages.GetBufferForTransaction(tx2);
 
-				buffer2.SetFreePage(0);
-				buffer2.SetFreePage(3);
-				buffer2.SetFreePage(9);
+				buffer2.SetPage(0, true);
+				buffer2.SetPage(3, true);
+				buffer2.SetPage(9, true);
 				buffer2.Find(1); // this will mark page 0 as busy
 
 				buffer1 = freePages.GetBufferForTransaction(tx1);
@@ -315,9 +316,9 @@ namespace Voron.Tests.Impl
 
 				var buffer = freePages.GetBufferForTransaction(tx1);
 
-				buffer.SetFreePage(0); // will mark modified bits
-				buffer.SetFreePage(3);
-				buffer.SetFreePage(9);
+				buffer.SetPage(0, true); // will mark modified bits
+				buffer.SetPage(3, true);
+				buffer.SetPage(9, true);
 
 				buffer = freePages.GetBufferForTransaction(tx1); // should clean modified pages
 
@@ -337,9 +338,9 @@ namespace Voron.Tests.Impl
 
 				var buffer = freePages.GetBufferForTransaction(tx);
 
-				buffer.SetFreePage(1);
-				buffer.SetFreePage(5);
-				buffer.SetFreePage(6);
+				buffer.SetPage(1, true);
+				buffer.SetPage(5, true);
+				buffer.SetPage(6, true);
 
 				Assert.True(buffer.ModifiedPages[1]);
 				Assert.True(buffer.ModifiedPages[5]);
@@ -356,8 +357,8 @@ namespace Voron.Tests.Impl
 
 				var buffer = freePages.GetBufferForTransaction(tx);
 
-				buffer.SetFreePage(1);
-				buffer.SetFreePage(2);
+				buffer.SetPage(1, true);
+				buffer.SetPage(2, true);
 
 				buffer.Find(2);
 
