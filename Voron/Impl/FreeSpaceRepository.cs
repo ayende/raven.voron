@@ -424,12 +424,12 @@ namespace Voron.Impl
             _lastTransactionPageUsage = pages;
         }
 
-        public void RegisterFreePages(Slice key, long id, List<long> freedPages)
+        public void RegisterFreePages(Slice key, long transactionId, List<long> freedPages)
         {
             _freedTransactions.AddLast(new FreedTransaction
                 {
                     Key = key,
-                    Id = id,
+                    Id = transactionId,
                     Pages = new List<long>(freedPages)
                 });
         }

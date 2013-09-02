@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using Voron.Impl.FileHeaders;
@@ -141,6 +142,15 @@ namespace Voron.Impl.FreeSpace
 					SecondBufferPageNumber = secondBufferStartPage,
 					PageSize = pageSize
 				};
+		}
+
+		public void ReleasePages(List<long> freedPages)
+		{
+			foreach (var freedPage in freedPages)
+			{
+				_current.MarkPage(freedPage, true);
+			}
+			
 		}
 	}
 }

@@ -10,7 +10,7 @@ namespace Voron.Impl
         void FlushFreeState(Transaction transaction);
         void LastTransactionPageUsage(int pages);
         List<long> AllPages(Transaction tx);
-        void RegisterFreePages(Slice slice, long id, List<long> freedPages);
+        void RegisterFreePages(Slice slice, long transactionId, List<long> freedPages);
         void UpdateSections(Transaction tx, long oldestTransaction);
         int MinimumFreePagesInSection { get; set; }
     }
@@ -40,7 +40,7 @@ namespace Voron.Impl
             return new List<long>();
         }
 
-        public void RegisterFreePages(Slice slice, long id, List<long> freedPages)
+        public void RegisterFreePages(Slice slice, long transactionId, List<long> freedPages)
         {
         }
 
