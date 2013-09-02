@@ -36,9 +36,9 @@ namespace Voron.Impl
 			}
 		}
 
-		protected override Page Get(long n)
+		protected override byte* AcquirePagePointer(long pageNumber)
 		{
-			return new Page(PagerState.Base + (n * PageSize), PageMaxSpace);
+			return PagerState.Base + (pageNumber*PageSize);
 		}
 
 		public override void AllocateMorePages(Transaction tx, long newLength)

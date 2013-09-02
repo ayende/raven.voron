@@ -6,7 +6,10 @@ namespace Voron.Impl.FreeSpace
 	public unsafe class UnmanagedBits
 	{
 		private readonly byte* _rawPtr;
-		private readonly long _size;
+		private readonly long _sizeInBytes;
+		private readonly long _capacity;
+		private readonly long _maxNumberOfDirtyBits;
+		private readonly long _maxNumberOfPages;
 		private readonly long _numberOfPages;
 		private readonly int _pageSize;
 		private readonly int* _freePagesPtr;
@@ -14,19 +17,28 @@ namespace Voron.Impl.FreeSpace
 
 		public long NumberOfTrackedPages { get { return _numberOfPages; } }
 
-		public UnmanagedBits(byte* ptr, long size, long numberOfPages, int pageSize)
+		public UnmanagedBits(byte* ptr, long sizeInBytes, long numberOfPages, int pageSize)
 		{
 			_rawPtr = ptr;
 			_freePagesPtr = (int*)_rawPtr + sizeof(int);
-			_dirtyFreePagesPtr = _freePagesPtr + (numberOfPages / sizeof(int));
-			_size = size;
+
+			_capacity = NumberOfBitsForAllocatedSizeInBytes(sizeInBytes - sizeof(int));
+
+			_maxNumberOfDirtyBits = (_capacity + pageSize - 1) / pageSize;
+			_maxNumberOfPages = _capacity - _maxNumberOfDirtyBits;
+
+			Debug.Assert(_maxNumberOfDirtyBits >= 1);
+			Debug.Assert(_maxNumberOfPages >= 1);
+
+			_dirtyFreePagesPtr = _freePagesPtr + _maxNumberOfPages;
+			
 			_numberOfPages = numberOfPages;
 			_pageSize = pageSize;
 		}
 
-		public long Size
+		public long MaxNumberOfPages
 		{
-			get { return _size; }
+			get { return _maxNumberOfPages; }
 		}
 
 		public bool IsDirty
@@ -57,7 +69,7 @@ namespace Voron.Impl.FreeSpace
 
 		private void SetBit(int* ptr, long pos, bool value)
 		{
-			if (pos < 0 || pos >= _size)
+			if (pos < 0 || pos >= _capacity)
 				throw new ArgumentOutOfRangeException("pos");
 
 			if (value)
@@ -82,6 +94,11 @@ namespace Voron.Impl.FreeSpace
 				Math.Min(1, numberOfPages / pageSize)); // modified pages
 		}
 
+		public static long NumberOfBitsForAllocatedSizeInBytes(long allocatedBytes)
+		{
+			return allocatedBytes*8;
+		}
+
 		private static long GetSizeInBytesFor(long numberOfBits)
 		{
 			return sizeof(int) * ((numberOfBits - 1) / 32 + 1);
@@ -89,9 +106,9 @@ namespace Voron.Impl.FreeSpace
 
 		public void CopyAllTo(UnmanagedBits other)
 		{
-			Debug.Assert(NumberOfTrackedPages == other.NumberOfTrackedPages && Size == other.Size);
-
-			NativeMethods.memcpy(other._rawPtr, _rawPtr, (int)GetSizeInBytesFor(_size));
+			Debug.Assert(NumberOfTrackedPages == other.NumberOfTrackedPages && _sizeInBytes == other._sizeInBytes);
+			
+			NativeMethods.memcpy(other._rawPtr, _rawPtr, (int)_sizeInBytes);
 		}
 
 		public void CopyDirtyPagesTo(UnmanagedBits other)
@@ -107,7 +124,17 @@ namespace Voron.Impl.FreeSpace
 
 		public bool IsFree(long pos)
 		{
-			return GetBit(_freePagesPtr, _size, pos);
+			return GetBit(_freePagesPtr, _numberOfPages, pos);
+		}
+
+		public void MoveTo(UnmanagedBits other)
+		{
+			// move dirty bit and all free pages
+			NativeMethods.memmove(other._rawPtr, _rawPtr, (int) (GetSizeInBytesFor(_maxNumberOfPages) + sizeof (int)));
+
+			// move all modified pages
+			NativeMethods.memmove((byte*) other._dirtyFreePagesPtr, (byte*) _dirtyFreePagesPtr,
+			                      (int) (GetSizeInBytesFor(_maxNumberOfDirtyBits)));
 		}
 	}
 }

@@ -1,5 +1,7 @@
-﻿using System.Diagnostics;
+﻿using System;
+using System.Diagnostics;
 using System.IO;
+using Voron.Impl.FileHeaders;
 
 namespace Voron.Impl.FreeSpace
 {
@@ -12,8 +14,7 @@ namespace Voron.Impl.FreeSpace
 
 		public decimal MaxNumberOfPages
 		{
-			get { throw new System.NotImplementedException(); }
-			set { throw new System.NotImplementedException(); }
+			get { return _current != null ? _current.MaxNumberOfPages : 0; }
 		}
 
 		public void SetBufferForTransaction(long transactionNumber)
@@ -35,7 +36,6 @@ namespace Voron.Impl.FreeSpace
 			}
 			else // copy dirty pages from reference
 			{
-				Debug.Assert(next.Size == reference.Size);
 				next.IsDirty = true;
 
 				reference.CopyDirtyPagesTo(next);
@@ -102,13 +102,45 @@ namespace Voron.Impl.FreeSpace
 			return rangeStart;
 		}
 
-		public void MoveTo(long fst, long snd, int pageCount, long actualSize)
+		public unsafe void MoveTo(long firstBufferStartPage, long secondBufferStartPage, long currentNumberOfAllocatedPages,
+		                          long actualSize, int pageSize, Func<long, IntPtr> acquirePagePointer)
 		{
-			throw new System.NotImplementedException(); 
 			// here we need to copy the old values to the new values
 			// note that:
 			// actual page size & actual size will be tracked in the file header, along with the page numbers
 			// of the 1st & 2nd free space ranges
+
+			if (bits[0] == null || bits[1] == null)
+			{
+				bits[0] = new UnmanagedBits((byte*) acquirePagePointer(firstBufferStartPage).ToPointer(), actualSize,
+				                            currentNumberOfAllocatedPages, pageSize);
+				bits[1] = new UnmanagedBits((byte*) acquirePagePointer(secondBufferStartPage).ToPointer(), actualSize,
+				                            currentNumberOfAllocatedPages, pageSize);
+			}
+			else
+			{
+				var newFirstBuffer = new UnmanagedBits((byte*) acquirePagePointer(firstBufferStartPage), actualSize,
+				                                       currentNumberOfAllocatedPages,
+				                                       pageSize);
+				bits[0].MoveTo(newFirstBuffer);
+				bits[0] = newFirstBuffer;
+
+				var newSecondBuffer = new UnmanagedBits((byte*) acquirePagePointer(secondBufferStartPage), actualSize,
+				                                        currentNumberOfAllocatedPages,
+				                                        pageSize);
+				bits[1].MoveTo(newSecondBuffer);
+				bits[1] = newSecondBuffer;
+
+				//todo mark old pages as free
+			}
+
+			var header = new FreeSpaceHeader
+				{
+					BuffersSize = actualSize,
+					FirstBufferPageNumber = firstBufferStartPage,
+					SecondBufferPageNumber = secondBufferStartPage,
+					PageSize = pageSize
+				};
 		}
 	}
 }

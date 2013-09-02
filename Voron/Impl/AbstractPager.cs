@@ -46,7 +46,12 @@ namespace Voron.Impl
             return Get(n);
         }
 
-        protected abstract Page Get(long n);
+	    protected abstract byte* AcquirePagePointer(long pageNumber);
+
+        protected Page Get(long n)
+        {
+			return new Page(AcquirePagePointer(n), PageMaxSpace);
+        }
 
         public abstract void Flush(List<long> sortedPagesToFlush);
         public abstract void Flush(long headerPageId);
@@ -123,8 +128,10 @@ namespace Voron.Impl
 		    tx.Environment.FreeSpaceHandling.MoveTo(
 			    firstBufferPageStart,
 			    secondBufferPageStart,
-				pageCount,
-			    requiredSize
+				NumberOfAllocatedPages,
+			    requiredSize,
+				PageSize,
+				n => new IntPtr(AcquirePagePointer(n))
 			    );
 	    }
 
