@@ -78,7 +78,7 @@ namespace Voron.Impl
 			if (numberOfPagesAfterAllocation > tx.Environment.FreeSpaceHandling.MaxNumberOfPages)
 			{
 				// Need to take into account size of free space allocation, if we need to re-allocate free space
-				allocationSize += UnmanagedBits.CalculateSizeInBytesForAllocation(numberOfPagesAfterAllocation, PageSize)*2;
+				allocationSize += UnmanagedBits.CalculateSizeInBytesForAllocation(2 * numberOfPagesAfterAllocation, PageSize);
 			}
 			
             AllocateMorePages(tx, allocationSize);
@@ -91,7 +91,7 @@ namespace Voron.Impl
 		    if (tx.Environment.FreeSpaceHandling.MaxNumberOfPages >= NumberOfAllocatedPages)
 			    return;
 
-		    var requiredSize = UnmanagedBits.CalculateSizeInBytesForAllocation(NumberOfAllocatedPages, PageSize)*2;
+		    var requiredSize = UnmanagedBits.CalculateSizeInBytesForAllocation(2 * NumberOfAllocatedPages, PageSize);
 		    var requiredPages = requiredSize/PageSize;
 			// we always allocate twice as much as we actually need, because we don't 
 
