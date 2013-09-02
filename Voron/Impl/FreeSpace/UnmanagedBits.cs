@@ -17,6 +17,8 @@ namespace Voron.Impl.FreeSpace
 
 		public long NumberOfTrackedPages { get { return _numberOfPages; } }
 
+		private long NumberOfDirtyPages { get { return (_capacity + _pageSize - 1) / _pageSize; } }
+
 		public UnmanagedBits(byte* ptr, long sizeInBytes, long numberOfPages, int pageSize)
 		{
 			_rawPtr = ptr;
@@ -31,7 +33,7 @@ namespace Voron.Impl.FreeSpace
 			Debug.Assert(_maxNumberOfPages >= 1);
 
 			_dirtyFreePagesPtr = _freePagesPtr + _maxNumberOfPages;
-			
+
 			_numberOfPages = numberOfPages;
 			_pageSize = pageSize;
 		}
@@ -61,7 +63,7 @@ namespace Voron.Impl.FreeSpace
 
 		public void ResetModifiedPages()
 		{
-			for (int i = 0; i < NumberOfTrackedPages; i++)
+			for (int i = 0; i < NumberOfDirtyPages; i++)
 			{
 				SetBit(_dirtyFreePagesPtr, i, false); // mark clean
 			}
@@ -96,7 +98,7 @@ namespace Voron.Impl.FreeSpace
 
 		public static long NumberOfBitsForAllocatedSizeInBytes(long allocatedBytes)
 		{
-			return allocatedBytes*8;
+			return allocatedBytes * 8;
 		}
 
 		private static long GetSizeInBytesFor(long numberOfBits)
@@ -107,20 +109,20 @@ namespace Voron.Impl.FreeSpace
 		public void CopyAllTo(UnmanagedBits other)
 		{
 			Debug.Assert(NumberOfTrackedPages == other.NumberOfTrackedPages && _sizeInBytes == other._sizeInBytes);
-			
+
 			NativeMethods.memcpy(other._rawPtr, _rawPtr, (int)_sizeInBytes);
 		}
 
 		public void CopyDirtyPagesTo(UnmanagedBits other)
-	    {
-		    for (int i = 0; i < _numberOfPages; i++)
-		    {
-				if (GetBit(_dirtyFreePagesPtr, _numberOfPages / _pageSize, i) == false)
-				    continue;
+		{
+			for (int i = 0; i < NumberOfDirtyPages; i++)
+			{
+				if (GetBit(_dirtyFreePagesPtr, NumberOfDirtyPages, i) == false)
+					continue;
 
 				NativeMethods.memcpy((byte*)other._freePagesPtr + (_pageSize * i), (byte*)_freePagesPtr + (_pageSize * i), _pageSize);
-		    }
-	    }
+			}
+		}
 
 		public bool IsFree(long pos)
 		{
@@ -130,11 +132,11 @@ namespace Voron.Impl.FreeSpace
 		public void MoveTo(UnmanagedBits other)
 		{
 			// move dirty bit and all free pages
-			NativeMethods.memmove(other._rawPtr, _rawPtr, (int) (GetSizeInBytesFor(_maxNumberOfPages) + sizeof (int)));
+			NativeMethods.memmove(other._rawPtr, _rawPtr, (int)(GetSizeInBytesFor(NumberOfTrackedPages) + sizeof(int)));
 
 			// move all modified pages
-			NativeMethods.memmove((byte*) other._dirtyFreePagesPtr, (byte*) _dirtyFreePagesPtr,
-			                      (int) (GetSizeInBytesFor(_maxNumberOfDirtyBits)));
+			NativeMethods.memmove((byte*)other._dirtyFreePagesPtr, (byte*)_dirtyFreePagesPtr,
+								  (int)(GetSizeInBytesFor(NumberOfDirtyPages)));
 		}
 	}
 }
