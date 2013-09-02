@@ -73,6 +73,14 @@ namespace Voron.Impl
                 allocationSize = GetNewLength(allocationSize);
             }
 
+	        var numberOfPagesAfterAllocation = allocationSize/PageSize;
+
+			if (numberOfPagesAfterAllocation > tx.Environment.FreeSpaceHandling.MaxNumberOfPages)
+			{
+				// Need to take into account size of free space allocation, if we need to re-allocate free space
+				allocationSize += UnmanagedBits.CalculateSizeInBytesForAllocation(numberOfPagesAfterAllocation, PageSize)*2;
+			}
+			
             AllocateMorePages(tx, allocationSize);
 
 	        EnsureFreeSpaceTrackingHasEnoughSpace(tx, pageCount);
@@ -84,12 +92,12 @@ namespace Voron.Impl
 			    return;
 
 		    var requiredSize = UnmanagedBits.CalculateSizeInBytesForAllocation(NumberOfAllocatedPages, PageSize)*2;
-
+		    var requiredPages = requiredSize/PageSize;
 			// we always allocate twice as much as we actually need, because we don't 
 
 		    // we request twice because it would likely be easier to find two smaller pieces than one big piece
-		    var firstBufferPageStart = tx.Environment.FreeSpaceHandling.Find(requiredSize);
-		    var secondBufferPageStart = tx.Environment.FreeSpaceHandling.Find(requiredSize);
+			var firstBufferPageStart = tx.Environment.FreeSpaceHandling.Find(requiredPages);
+			var secondBufferPageStart = tx.Environment.FreeSpaceHandling.Find(requiredPages);
 
 		    // this is a bit of a hack, because we modify the NextPageNumber just before
 		    // the tx is going to modify it, too.
@@ -98,14 +106,14 @@ namespace Voron.Impl
 		    // allocating
 		    if (firstBufferPageStart == -1)
 		    {
-			    firstBufferPageStart = tx.NextPageNumber + pageCount;
+			    firstBufferPageStart = tx.NextPageNumber + pageCount; // TODO arek: Verify that!
 			    pageCount = 0;
-			    tx.NextPageNumber += requiredSize;
+				tx.NextPageNumber += requiredPages;
 		    }
 		    if (secondBufferPageStart == -1)
 		    {
-			    secondBufferPageStart = tx.NextPageNumber + pageCount;
-			    tx.NextPageNumber += requiredSize;
+				secondBufferPageStart = tx.NextPageNumber + pageCount; // TODO arek: and this as well!
+				tx.NextPageNumber += requiredPages;
 		    }
 
 		    if (tx.NextPageNumber >= NumberOfAllocatedPages)
@@ -168,10 +176,7 @@ namespace Voron.Impl
             current = Math.Max(current, 256 * PageSize);
             var actualIncrease = Math.Min(_increaseSize, current / 4);
 
-			// TODO: Need to take into account size of free space allocation, if we need to re-allocate free space
-	        tx.Environment.FreeSpaceHandling.MaxNumberOfPages();
-
-            return current + actualIncrease;
+	        return current + actualIncrease;
         }
     }
 }
