@@ -9,7 +9,7 @@ using System.Runtime.InteropServices;
 namespace Voron.Impl.FileHeaders
 {
 	[StructLayout(LayoutKind.Explicit, Pack = 1)]
-	public class FreeSpaceHeader
+	public struct FreeSpaceHeader
 	{
 		[FieldOffset(0)]
 		public long FirstBufferPageNumber;
