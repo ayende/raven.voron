@@ -63,18 +63,21 @@ namespace Voron
 				WriteEmptyHeaderPage(_pager.Get(null, 0));
 				WriteEmptyHeaderPage(_pager.Get(null, 1));
 
-				NextPageNumber = 2;
+				long initializingNextPageNumber = 2;
+
+				FreeSpaceHandling.EnsureFreeSpaceTrackingHasEnoughSpace(_pager, ref initializingNextPageNumber);
+
+				NextPageNumber = initializingNextPageNumber;
 
 				using (var tx = new Transaction(_pager, this, _transactionsCounter + 1, TransactionFlags.ReadWrite, FreeSpaceHandling))
 				{
+					FreeSpaceHandling.SetBufferForTransaction(tx.Id);
 					var root = Tree.Create(tx, _sliceComparer);
 
 					// important to first create the tree, then set it on the env
 					Root = root;
 
 					tx.UpdateRoot(root);
-
-					FreeSpaceHandling.SetBufferForTransaction(tx.Id);
 
 					tx.Commit();
 				}
@@ -201,7 +204,7 @@ namespace Voron
 			fileHeader->FreeSpace.FirstBufferPageNumber = -1;
 			fileHeader->FreeSpace.SecondBufferPageNumber = -1;
 			fileHeader->FreeSpace.NumberOfTrackedPages = 0;
-			fileHeader->FreeSpace.BuffersSizeInBytes = 0;
+			fileHeader->FreeSpace.NumberOfTakenPagesForTracking = 0;
 			fileHeader->FreeSpace.PageSize = -1;
 			fileHeader->Root.RootPageNumber = -1;
 		}

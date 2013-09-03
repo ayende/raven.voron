@@ -36,6 +36,8 @@ namespace Voron.Impl.FreeSpace
 
 			_numberOfPages = numberOfPages;
 			_pageSize = pageSize;
+
+			NativeMethods.memset(_rawPtr, 0, (int)_sizeInBytes); // clean all bits
 		}
 
 		public long MaxNumberOfPages

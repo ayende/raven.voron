@@ -15,7 +15,7 @@ namespace Voron.Impl.FreeSpace
 
 		private FreeSpaceHeader state;
 		private UnmanagedBits _current;
-		private long _lastSearchPosition;
+		private long _lastSearchPosition = -1;
 		private bool initialized;
 
 		public decimal MaxNumberOfPages
@@ -35,16 +35,16 @@ namespace Voron.Impl.FreeSpace
 
 		public unsafe void Initialize(FreeSpaceHeader* header)
 		{
-			bits[0] = new UnmanagedBits((byte*)acquirePagePointer(header->FirstBufferPageNumber).ToPointer(), header->BuffersSizeInBytes,
+			bits[0] = new UnmanagedBits((byte*)acquirePagePointer(header->FirstBufferPageNumber).ToPointer(), header->NumberOfTakenPagesForTracking * header->PageSize,
 											header->NumberOfTrackedPages, header->PageSize);
-			bits[1] = new UnmanagedBits((byte*)acquirePagePointer(header->SecondBufferPageNumber).ToPointer(), header->BuffersSizeInBytes,
+			bits[1] = new UnmanagedBits((byte*)acquirePagePointer(header->SecondBufferPageNumber).ToPointer(), header->NumberOfTakenPagesForTracking * header->PageSize,
 										header->NumberOfTrackedPages, header->PageSize);
 
 			state = new FreeSpaceHeader
 				{
 					FirstBufferPageNumber = header->FirstBufferPageNumber,
 					SecondBufferPageNumber = header->SecondBufferPageNumber,
-					BuffersSizeInBytes = header->BuffersSizeInBytes,
+					NumberOfTakenPagesForTracking = header->NumberOfTakenPagesForTracking,
 					NumberOfTrackedPages = header->NumberOfTrackedPages,
 					PageSize = header->PageSize
 				};
@@ -103,7 +103,7 @@ namespace Voron.Impl.FreeSpace
 
 			if (result != -1)
 			{
-				for (long i = result; i < numberOfFreePages; i++)
+				for (long i = result; i < result + numberOfFreePages; i++)
 				{
 					_current.MarkPage(i, false);// mark returned pages as busy
 				}
@@ -127,7 +127,7 @@ namespace Voron.Impl.FreeSpace
 			{
 				searched++;
 
-				if (_lastSearchPosition >= _current.NumberOfTrackedPages)
+				if (_lastSearchPosition >= _current.NumberOfTrackedPages - 1)
 					_lastSearchPosition = -1;
 
 				_lastSearchPosition++;
@@ -148,7 +148,7 @@ namespace Voron.Impl.FreeSpace
 				rangeStart = -1;
 			}
 
-			if (rangeSize == 0)
+			if (rangeSize < numberOfPagesToGet)
 				return -1;
 
 			Debug.Assert(rangeSize == numberOfPagesToGet);
@@ -156,40 +156,24 @@ namespace Voron.Impl.FreeSpace
 			return rangeStart;
 		}
 
-		public unsafe void MoveTo(long firstBufferStartPage, long secondBufferStartPage, long numberOfTrackedPages,
-		                          long allocatedSizeInBytes, int pageSize)
+		public unsafe void MoveTo(FreeSpaceHeader header)
 		{
-			var header = new FreeSpaceHeader
-			{
-				FirstBufferPageNumber = firstBufferStartPage,
-				SecondBufferPageNumber = secondBufferStartPage,
-				NumberOfTrackedPages = numberOfTrackedPages,
-				BuffersSizeInBytes = allocatedSizeInBytes,
-				PageSize = pageSize
-			};
+			var newFirstBuffer = new UnmanagedBits((byte*)acquirePagePointer(header.FirstBufferPageNumber), header.NumberOfTakenPagesForTracking * header.PageSize,
+				                                    header.NumberOfTrackedPages,
+				                                    header.PageSize);
+			bits[0].MoveTo(newFirstBuffer);
+			bits[0] = newFirstBuffer;
 
-			if (initialized == false)
-			{
-				Initialize(&header);
-			}
-			else
-			{
-				var newFirstBuffer = new UnmanagedBits((byte*) acquirePagePointer(firstBufferStartPage), allocatedSizeInBytes,
-				                                       numberOfTrackedPages,
-				                                       pageSize);
-				bits[0].MoveTo(newFirstBuffer);
-				bits[0] = newFirstBuffer;
+			var newSecondBuffer = new UnmanagedBits((byte*)acquirePagePointer(header.SecondBufferPageNumber), header.NumberOfTakenPagesForTracking * header.PageSize,
+													header.NumberOfTrackedPages,
+													header.PageSize);
+			bits[0].MoveTo(newFirstBuffer);
+			bits[1].MoveTo(newSecondBuffer);
+			bits[1] = newSecondBuffer;
 
-				var newSecondBuffer = new UnmanagedBits((byte*) acquirePagePointer(secondBufferStartPage), allocatedSizeInBytes,
-				                                        numberOfTrackedPages,
-				                                        pageSize);
-				bits[1].MoveTo(newSecondBuffer);
-				bits[1] = newSecondBuffer;
+			state = header;
 
-				state = header;
-
-				//todo mark old pages as free
-			}
+			//todo mark old pages as free
 		}
 
 		public void RegisterFreePages(List<long> freedPages)
@@ -210,6 +194,61 @@ namespace Voron.Impl.FreeSpace
 			{
 				_current.MarkPage(freedPage, true);
 			}
+
+			registeredFreedPages.Clear();
+		}
+
+		public unsafe void EnsureFreeSpaceTrackingHasEnoughSpace(IVirtualPager pager, ref long nextPageNumber)
+		{
+			if (MaxNumberOfPages >= pager.NumberOfAllocatedPages)
+				return;
+
+			var requiredSize = UnmanagedBits.CalculateSizeInBytesForAllocation(2 * pager.NumberOfAllocatedPages, pager.PageSize);
+			var requiredPages = (long)Math.Ceiling((float)requiredSize / pager.PageSize);
+			// we always allocate twice as much as we actually need, because we don't 
+
+			// we request twice because it would likely be easier to find two smaller pieces than one big piece
+			var firstBufferPageStart = Find(requiredPages);
+			var secondBufferPageStart = Find(requiredPages);
+
+			// this is a bit of a hack, because we modify the NextPageNumber just before
+			// the tx is going to modify it, too.
+			// However, this is currently safe because the tx will just add to its current value
+			// so we can do that. However, note that we need to skip the range that it is _currently_
+			// allocating
+			if (firstBufferPageStart == -1)
+			{
+				firstBufferPageStart = nextPageNumber; // TODO arek: Verify that!
+				nextPageNumber += requiredPages;
+			}
+
+			if (secondBufferPageStart == -1)
+			{
+				secondBufferPageStart = nextPageNumber; // TODO arek: and this as well!
+				nextPageNumber += requiredPages;
+			}
+
+			if (nextPageNumber >= pager.NumberOfAllocatedPages)
+				throw new InvalidOperationException(
+					"BUG, cannot find space for free space during file growth because the required size was too big even after the re-growth");
+
+			var header = new FreeSpaceHeader
+			{
+				FirstBufferPageNumber = firstBufferPageStart,
+				SecondBufferPageNumber = secondBufferPageStart,
+				NumberOfTrackedPages = pager.NumberOfAllocatedPages,
+				NumberOfTakenPagesForTracking = requiredPages,
+				PageSize = pager.PageSize
+			};
+
+			if (initialized == false)
+			{
+				Initialize(&header);
+			}
+			else
+			{
+				MoveTo(header);
+			}
 		}
 
 		public unsafe void CopyStateTo(FreeSpaceHeader* freeSpaceHeader)
@@ -217,7 +256,7 @@ namespace Voron.Impl.FreeSpace
 			freeSpaceHeader->FirstBufferPageNumber = state.FirstBufferPageNumber;
 			freeSpaceHeader->SecondBufferPageNumber = state.SecondBufferPageNumber;
 			freeSpaceHeader->NumberOfTrackedPages = state.NumberOfTrackedPages;
-			freeSpaceHeader->BuffersSizeInBytes = state.BuffersSizeInBytes;
+			freeSpaceHeader->NumberOfTakenPagesForTracking = state.NumberOfTakenPagesForTracking;
 			freeSpaceHeader->PageSize = state.PageSize;
 		}
 	}
