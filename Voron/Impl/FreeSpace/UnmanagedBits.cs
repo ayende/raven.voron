@@ -14,12 +14,13 @@ namespace Voron.Impl.FreeSpace
 		private readonly int _pageSize;
 		private readonly int* _freePagesPtr;
 		private readonly int* _dirtyFreePagesPtr;
+		private readonly long _startPageNumber;
 
 		public long NumberOfTrackedPages { get { return _numberOfPages; } }
 
 		private long NumberOfDirtyPages { get { return (_capacity + _pageSize - 1) / _pageSize; } }
 
-		public UnmanagedBits(byte* ptr, long sizeInBytes, long numberOfPages, int pageSize)
+		public UnmanagedBits(byte* ptr, long startPageNumber, long sizeInBytes, long numberOfPages, int pageSize)
 		{
 			_rawPtr = ptr;
 			_freePagesPtr = (int*)_rawPtr + sizeof(int);
@@ -37,12 +38,19 @@ namespace Voron.Impl.FreeSpace
 			_numberOfPages = numberOfPages;
 			_pageSize = pageSize;
 
+			_startPageNumber = startPageNumber;
+
 			NativeMethods.memset(_rawPtr, 0, (int)_sizeInBytes); // clean all bits
 		}
 
 		public long MaxNumberOfPages
 		{
 			get { return _maxNumberOfPages; }
+		}
+
+		public long StartPageNumber
+		{
+			get { return _startPageNumber; }
 		}
 
 		public bool IsDirty

@@ -204,7 +204,7 @@ namespace Voron
 			fileHeader->FreeSpace.FirstBufferPageNumber = -1;
 			fileHeader->FreeSpace.SecondBufferPageNumber = -1;
 			fileHeader->FreeSpace.NumberOfTrackedPages = 0;
-			fileHeader->FreeSpace.NumberOfTakenPagesForTracking = 0;
+			fileHeader->FreeSpace.NumberOfPagesTakenForTracking = 0;
 			fileHeader->FreeSpace.PageSize = -1;
 			fileHeader->Root.RootPageNumber = -1;
 		}

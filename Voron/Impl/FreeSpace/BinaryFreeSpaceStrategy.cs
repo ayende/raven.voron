@@ -35,16 +35,18 @@ namespace Voron.Impl.FreeSpace
 
 		public unsafe void Initialize(FreeSpaceHeader* header)
 		{
-			bits[0] = new UnmanagedBits((byte*)acquirePagePointer(header->FirstBufferPageNumber).ToPointer(), header->NumberOfTakenPagesForTracking * header->PageSize,
-											header->NumberOfTrackedPages, header->PageSize);
-			bits[1] = new UnmanagedBits((byte*)acquirePagePointer(header->SecondBufferPageNumber).ToPointer(), header->NumberOfTakenPagesForTracking * header->PageSize,
-										header->NumberOfTrackedPages, header->PageSize);
+			bits[0] = new UnmanagedBits((byte*) acquirePagePointer(header->FirstBufferPageNumber).ToPointer(),
+			                            header->FirstBufferPageNumber, header->NumberOfPagesTakenForTracking*header->PageSize,
+			                            header->NumberOfTrackedPages, header->PageSize);
+			bits[1] = new UnmanagedBits((byte*) acquirePagePointer(header->SecondBufferPageNumber).ToPointer(),
+			                            header->SecondBufferPageNumber, header->NumberOfPagesTakenForTracking*header->PageSize,
+			                            header->NumberOfTrackedPages, header->PageSize);
 
 			state = new FreeSpaceHeader
 				{
 					FirstBufferPageNumber = header->FirstBufferPageNumber,
 					SecondBufferPageNumber = header->SecondBufferPageNumber,
-					NumberOfTakenPagesForTracking = header->NumberOfTakenPagesForTracking,
+					NumberOfPagesTakenForTracking = header->NumberOfPagesTakenForTracking,
 					NumberOfTrackedPages = header->NumberOfTrackedPages,
 					PageSize = header->PageSize
 				};
@@ -158,15 +160,19 @@ namespace Voron.Impl.FreeSpace
 
 		public unsafe void MoveTo(FreeSpaceHeader header)
 		{
-			var newFirstBuffer = new UnmanagedBits((byte*)acquirePagePointer(header.FirstBufferPageNumber), header.NumberOfTakenPagesForTracking * header.PageSize,
-				                                    header.NumberOfTrackedPages,
-				                                    header.PageSize);
+			var newFirstBuffer = new UnmanagedBits((byte*) acquirePagePointer(header.FirstBufferPageNumber),
+			                                       header.FirstBufferPageNumber,
+			                                       header.NumberOfPagesTakenForTracking*header.PageSize,
+			                                       header.NumberOfTrackedPages,
+			                                       header.PageSize);
 			bits[0].MoveTo(newFirstBuffer);
 			bits[0] = newFirstBuffer;
 
-			var newSecondBuffer = new UnmanagedBits((byte*)acquirePagePointer(header.SecondBufferPageNumber), header.NumberOfTakenPagesForTracking * header.PageSize,
-													header.NumberOfTrackedPages,
-													header.PageSize);
+			var newSecondBuffer = new UnmanagedBits((byte*) acquirePagePointer(header.SecondBufferPageNumber),
+			                                        header.SecondBufferPageNumber,
+			                                        header.NumberOfPagesTakenForTracking*header.PageSize,
+			                                        header.NumberOfTrackedPages,
+			                                        header.PageSize);
 			bits[0].MoveTo(newFirstBuffer);
 			bits[1].MoveTo(newSecondBuffer);
 			bits[1] = newSecondBuffer;
@@ -196,6 +202,18 @@ namespace Voron.Impl.FreeSpace
 			}
 
 			registeredFreedPages.Clear();
+		}
+
+		public List<long> GetBufferPages()
+		{
+			var range = new List<long>();
+
+			for (var i = _current.StartPageNumber; i < _current.StartPageNumber + state.NumberOfPagesTakenForTracking; i++)
+			{
+				range.Add(i);
+			}
+
+			return range;
 		}
 
 		public unsafe void EnsureFreeSpaceTrackingHasEnoughSpace(IVirtualPager pager, ref long nextPageNumber)
@@ -237,7 +255,7 @@ namespace Voron.Impl.FreeSpace
 				FirstBufferPageNumber = firstBufferPageStart,
 				SecondBufferPageNumber = secondBufferPageStart,
 				NumberOfTrackedPages = pager.NumberOfAllocatedPages,
-				NumberOfTakenPagesForTracking = requiredPages,
+				NumberOfPagesTakenForTracking = requiredPages,
 				PageSize = pager.PageSize
 			};
 
@@ -256,7 +274,7 @@ namespace Voron.Impl.FreeSpace
 			freeSpaceHeader->FirstBufferPageNumber = state.FirstBufferPageNumber;
 			freeSpaceHeader->SecondBufferPageNumber = state.SecondBufferPageNumber;
 			freeSpaceHeader->NumberOfTrackedPages = state.NumberOfTrackedPages;
-			freeSpaceHeader->NumberOfTakenPagesForTracking = state.NumberOfTakenPagesForTracking;
+			freeSpaceHeader->NumberOfPagesTakenForTracking = state.NumberOfPagesTakenForTracking;
 			freeSpaceHeader->PageSize = state.PageSize;
 		}
 	}

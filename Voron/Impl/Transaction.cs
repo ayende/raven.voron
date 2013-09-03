@@ -220,6 +220,8 @@ namespace Voron.Impl
 
 			freeSpaceHandling.OnCommit();
 
+			_pager.Flush(freeSpaceHandling.GetBufferPages());
+
 			WriteHeader(_pager.Get(this, _id & 1)); // this will cycle between the first and second pages
 
 			_pager.Flush(_id & 1); // and now we flush the metadata as well
