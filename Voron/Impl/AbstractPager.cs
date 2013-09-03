@@ -46,7 +46,7 @@ namespace Voron.Impl
             return Get(n);
         }
 
-	    protected abstract byte* AcquirePagePointer(long pageNumber);
+	    public abstract byte* AcquirePagePointer(long pageNumber);
 
         protected Page Get(long n)
         {
@@ -72,7 +72,7 @@ namespace Voron.Impl
             // this ensure that if we want to get a range that is more than the current expansion
             // we will increase as much as needed in one shot
             var minRequested = (requestedPageNumber + pageCount) * PageSize;
-            var allocationSize = NumberOfAllocatedPages * PageSize;
+            var allocationSize = tx == null ? minRequested : NumberOfAllocatedPages * PageSize;
             while (minRequested > allocationSize)
             {
                 allocationSize = GetNewLength(allocationSize);
@@ -80,7 +80,7 @@ namespace Voron.Impl
 
 	        var numberOfPagesAfterAllocation = allocationSize/PageSize;
 
-			if (numberOfPagesAfterAllocation > tx.Environment.FreeSpaceHandling.MaxNumberOfPages)
+			if (tx != null && numberOfPagesAfterAllocation > tx.Environment.FreeSpaceHandling.MaxNumberOfPages)
 			{
 				// Need to take into account size of free space allocation, if we need to re-allocate free space
 				allocationSize += UnmanagedBits.CalculateSizeInBytesForAllocation(2 * numberOfPagesAfterAllocation, PageSize);
@@ -88,7 +88,10 @@ namespace Voron.Impl
 			
             AllocateMorePages(tx, allocationSize);
 
-	        EnsureFreeSpaceTrackingHasEnoughSpace(tx, pageCount);
+			if (tx != null)
+			{
+				EnsureFreeSpaceTrackingHasEnoughSpace(tx, pageCount);
+			}
         }
 
 	    private void EnsureFreeSpaceTrackingHasEnoughSpace(Transaction tx, int pageCount)
@@ -97,7 +100,7 @@ namespace Voron.Impl
 			    return;
 
 		    var requiredSize = UnmanagedBits.CalculateSizeInBytesForAllocation(2 * NumberOfAllocatedPages, PageSize);
-		    var requiredPages = requiredSize/PageSize;
+		    var requiredPages = (long) Math.Ceiling((float)requiredSize/PageSize);
 			// we always allocate twice as much as we actually need, because we don't 
 
 		    // we request twice because it would likely be easier to find two smaller pieces than one big piece
@@ -111,17 +114,17 @@ namespace Voron.Impl
 		    // allocating
 		    if (firstBufferPageStart == -1)
 		    {
-			    firstBufferPageStart = tx.NextPageNumber + pageCount; // TODO arek: Verify that!
-			    pageCount = 0;
-				tx.NextPageNumber += requiredPages;
-		    }
-		    if (secondBufferPageStart == -1)
-		    {
-				secondBufferPageStart = tx.NextPageNumber + pageCount; // TODO arek: and this as well!
+			    firstBufferPageStart = tx.NextPageNumber; // TODO arek: Verify that!
 				tx.NextPageNumber += requiredPages;
 		    }
 
-		    if (tx.NextPageNumber >= NumberOfAllocatedPages)
+		    if (secondBufferPageStart == -1)
+		    {
+				secondBufferPageStart = tx.NextPageNumber; // TODO arek: and this as well!
+				tx.NextPageNumber += requiredPages;
+		    }
+
+		    if (tx.NextPageNumber + pageCount >= NumberOfAllocatedPages)
 			    throw new InvalidOperationException(
 				    "BUG, cannot find space for free space during file growth because the required size was too big even after the re-growth");
 
@@ -130,8 +133,7 @@ namespace Voron.Impl
 			    secondBufferPageStart,
 				NumberOfAllocatedPages,
 			    requiredSize,
-				PageSize,
-				n => new IntPtr(AcquirePagePointer(n))
+				PageSize
 			    );
 	    }
 
@@ -143,7 +145,9 @@ namespace Voron.Impl
                 _tempPage = IntPtr.Zero;
             }
         }
+
         public abstract void AllocateMorePages(Transaction tx, long newLength);
+
         public Page TempPage
         {
             get
@@ -156,7 +160,6 @@ namespace Voron.Impl
                 };
             }
         }
-
 
         private long GetNewLength(long current)
         {

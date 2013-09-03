@@ -47,7 +47,6 @@
     <Compile Include="Exceptions\ConcurrencyException.cs" />
     <Compile Include="Impl\AbstractPager.cs" />
     <Compile Include="Impl\FileHeaders\FreeSpaceHeader.cs" />
-    <Compile Include="Impl\FreeSpace\BinaryFreeSpaceRepository.cs" />
     <Compile Include="Impl\FreeSpace\BinaryFreeSpaceStrategy.cs" />
     <Compile Include="Impl\ConsecutiveSequences.cs" />
     <Compile Include="Impl\Constants.cs" />

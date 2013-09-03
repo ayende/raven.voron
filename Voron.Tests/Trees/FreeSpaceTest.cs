@@ -13,7 +13,7 @@ namespace Voron.Tests.Trees
 			var buffer = new byte[512];
 			random.NextBytes(buffer);
 
-			Env.FreeSpaceRepository.MinimumFreePagesInSection = 1;
+			//Env.FreeSpaceRepository.MinimumFreePagesInSection = 1; TODO arek
 
 			using (var tx = Env.NewTransaction(TransactionFlags.ReadWrite))
 			{

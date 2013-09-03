@@ -4,10 +4,11 @@ using Voron.Trees;
 
 namespace Voron.Impl
 {
-    public interface IVirtualPager : IDisposable
+    public unsafe interface IVirtualPager : IDisposable
     {
         PagerState PagerState { get; }
 
+		byte* AcquirePagePointer(long pageNumber);
         Page Get(Transaction tx, long n, bool errorOnChange = false);
 		void AllocateMorePages(Transaction tx, long newLength);
 

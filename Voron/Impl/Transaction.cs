@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using Voron.Impl.FileHeaders;
+using Voron.Impl.FreeSpace;
 using Voron.Trees;
 
 namespace Voron.Impl
@@ -17,13 +18,12 @@ namespace Voron.Impl
 		private readonly long _id;
 
 		private TreeDataInTransaction _rootTreeData;
-		private TreeDataInTransaction _fresSpaceTreeData;
 		private Dictionary<Tuple<Tree, Slice>, Tree> _multiValueTrees;
 		private readonly Dictionary<Tree, TreeDataInTransaction> _treesInfo = new Dictionary<Tree, TreeDataInTransaction>();
 		private readonly Dictionary<long, long> _dirtyPages = new Dictionary<long, long>();
 		private readonly List<long> _freedPages = new List<long>();
 		private readonly HashSet<PagerState> _pagerStates = new HashSet<PagerState>();
-		private readonly IFreeSpaceRepository _freeSpaceRepository;
+		private readonly BinaryFreeSpaceStrategy freeSpaceHandling;
 
 		public TransactionFlags Flags { get; private set; }
 
@@ -62,12 +62,12 @@ namespace Voron.Impl
 			get { return modifiedTrees != null; }
 		}
 
-		public Transaction(IVirtualPager pager, StorageEnvironment env, long id, TransactionFlags flags, IFreeSpaceRepository freeSpaceRepository)
+		public Transaction(IVirtualPager pager, StorageEnvironment env, long id, TransactionFlags flags, BinaryFreeSpaceStrategy freeSpaceHandling)
 		{
 			_pager = pager;
 			_env = env;
 			_id = id;
-			_freeSpaceRepository = freeSpaceRepository;
+			this.freeSpaceHandling = freeSpaceHandling;
 			Flags = flags;
 			NextPageNumber = env.NextPageNumber;
 		}
@@ -142,7 +142,7 @@ namespace Voron.Impl
 
 		public Page AllocatePage(int num)
 		{
-			Page page = _freeSpaceRepository.TryAllocateFromFreeSpace(this, num);
+			Page page = freeSpaceHandling.TryAllocateFromFreeSpace(this, num);
 			if (page == null) // allocate from end of file
 			{
 				if (num > 1)
@@ -181,7 +181,7 @@ namespace Voron.Impl
 
 			FlushAllMultiValues();
 
-			_freeSpaceRepository.FlushFreeState(this);
+			// freeSpaceHandling.FlushFreeState(this); TODO arek check this
 
 			foreach (var kvp in _treesInfo)
 			{
@@ -201,26 +201,13 @@ namespace Voron.Impl
 				tree.State.CopyTo(treePtr);
 			}
 
-			FlushFreePages();   // this is the the free space that is available when all concurrent transactions are done
+			freeSpaceHandling.RegisterFreePages(_freedPages);   // this is the the free space that is available when all concurrent transactions are done
 
 			if (_rootTreeData != null)
 			{
 				_env.Root.DebugValidateTree(this, _rootTreeData.RootPageNumber);
 				_rootTreeData.Flush();
 			}
-
-			if (_fresSpaceTreeData != null)
-			{
-				_env.FreeSpaceRoot.DebugValidateTree(this, _fresSpaceTreeData.RootPageNumber);
-				_fresSpaceTreeData.Flush();
-			}
-
-#if DEBUG
-			if (_env.Root != null && _env.FreeSpaceRoot != null)
-			{
-				Debug.Assert(_env.Root.State.RootPageNumber != _env.FreeSpaceRoot.State.RootPageNumber);
-			}
-#endif
 
 			_env.NextPageNumber = NextPageNumber;
 
@@ -231,8 +218,7 @@ namespace Voron.Impl
 			sortedPagesToFlush.Sort();
 			_pager.Flush(sortedPagesToFlush);
 
-			if (_freeSpaceRepository != null)
-				_freeSpaceRepository.LastTransactionPageUsage(sortedPagesToFlush.Count);
+			freeSpaceHandling.OnCommit();
 
 			WriteHeader(_pager.Get(this, _id & 1)); // this will cycle between the first and second pages
 
@@ -273,35 +259,8 @@ namespace Voron.Impl
 			var fileHeader = (FileHeader*)pg.Base;
 			fileHeader->TransactionId = _id;
 			fileHeader->LastPageNumber = NextPageNumber - 1;
-			_env.FreeSpaceRoot.State.CopyTo(&fileHeader->FreeSpace);
+			freeSpaceHandling.CopyStateTo(&fileHeader->FreeSpace);
 			_env.Root.State.CopyTo(&fileHeader->Root);
-		}
-
-		private void FlushFreePages()
-		{
-			int iterationCounter = 0;
-			while (_freedPages.Count != 0)
-			{
-				Slice slice = string.Format("tx/{0:0000000000000000000}/{1}", _id, iterationCounter);
-
-				iterationCounter++;
-				using (var ms = new MemoryStream())
-				using (var binaryWriter = new BinaryWriter(ms))
-				{
-					_freeSpaceRepository.RegisterFreePages(slice, _id, _freedPages);
-					foreach (var freePage in _freedPages)
-					{
-						binaryWriter.Write(freePage);
-					}
-					_freedPages.Clear();
-
-					ms.Position = 0;
-
-					// this may cause additional pages to be freed, so we need need the while loop to track them all
-					_env.FreeSpaceRoot.Add(this, slice, ms);
-					ms.Position = 0; // so if we have additional freed pages, they will be added
-				}
-			}
 		}
 
 		public void Dispose()
@@ -321,15 +280,6 @@ namespace Voron.Impl
 				return _rootTreeData ?? (_rootTreeData = new TreeDataInTransaction(_env.Root)
 					{
 						RootPageNumber = _env.Root.State.RootPageNumber
-					});
-			}
-
-			// ReSharper disable once PossibleUnintendedReferenceComparison
-			if (tree == _env.FreeSpaceRoot)
-			{
-				return _fresSpaceTreeData ?? (_fresSpaceTreeData = new TreeDataInTransaction(_env.FreeSpaceRoot)
-					{
-						RootPageNumber = _env.FreeSpaceRoot.State.RootPageNumber
 					});
 			}
 
@@ -356,7 +306,7 @@ namespace Voron.Impl
 			_freedPages.Add(pageNumber);
 		}
 
-		internal void UpdateRoots(Tree root, Tree freeSpace)
+		internal void UpdateRoot(Tree root)
 		{
 			if (_treesInfo.TryGetValue(root, out _rootTreeData))
 			{
@@ -365,14 +315,6 @@ namespace Voron.Impl
 			else
 			{
 				_rootTreeData = new TreeDataInTransaction(root);
-			}
-			if (_treesInfo.TryGetValue(freeSpace, out _fresSpaceTreeData))
-			{
-				_treesInfo.Remove(freeSpace);
-			}
-			else
-			{
-				_fresSpaceTreeData = new TreeDataInTransaction(freeSpace);
 			}
 		}
 

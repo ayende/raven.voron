@@ -16,8 +16,11 @@ namespace Voron.Impl.FileHeaders
 		[FieldOffset(8)]
 		public long SecondBufferPageNumber;
 		[FieldOffset(16)]
-		public long PageSize;
-		[FieldOffset(16)]
-		public long BuffersSize;
+		public long NumberOfTrackedPages;
+		[FieldOffset(24)]
+		public long BuffersSizeInBytes;
+		[FieldOffset(32)]
+		public int PageSize;
+		
 	}
 }

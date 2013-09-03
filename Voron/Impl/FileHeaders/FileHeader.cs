@@ -32,7 +32,7 @@ namespace Voron.Impl.FileHeaders
         /// The root node for free space
         /// </summary>
         [FieldOffset(28)] 
-        public TreeRootHeader FreeSpace;
+        public FreeSpaceHeader FreeSpace;
 
         /// <summary>
         /// The root node for the main tree

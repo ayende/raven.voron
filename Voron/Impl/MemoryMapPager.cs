@@ -36,7 +36,7 @@ namespace Voron.Impl
 			}
 		}
 
-		protected override byte* AcquirePagePointer(long pageNumber)
+		public override byte* AcquirePagePointer(long pageNumber)
 		{
 			return PagerState.Base + (pageNumber*PageSize);
 		}
