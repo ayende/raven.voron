@@ -98,7 +98,6 @@ namespace Voron
 			_transactionsCounter = entry->TransactionId + 1;
 			using (var tx = new Transaction(_pager, this, _transactionsCounter + 1, TransactionFlags.ReadWrite, FreeSpaceHandling))
 			{
-				//TODO arek - check free space handling start on existing storage
 				var root = Tree.Open(tx, _sliceComparer, &entry->Root);
 
 				// important to first create the  tree, then set it on the env
@@ -106,6 +105,8 @@ namespace Voron
 
 				var freeSpaceHeader = &entry->FreeSpace;
 				FreeSpaceHandling.Initialize(freeSpaceHeader);
+
+				FreeSpaceHandling.SetBufferForTransaction(tx.Id);
 
 				tx.Commit();
 			}
