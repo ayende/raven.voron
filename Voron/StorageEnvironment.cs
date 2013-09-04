@@ -245,6 +245,9 @@ namespace Voron
 		public Transaction NewTransaction(TransactionFlags flags)
 		{
 			bool txLockTaken = false;
+
+			Transaction tx = null;
+
 			try
 			{
 				long txId = _transactionsCounter;
@@ -254,7 +257,7 @@ namespace Voron
 					_txWriter.Wait();
 					txLockTaken = true;
 				}
-				var tx = new Transaction(_pager, this, txId, flags, FreeSpaceHandling);
+				tx = new Transaction(_pager, this, txId, flags, FreeSpaceHandling);
 				_activeTransactions.TryAdd(txId, tx);
 				var state = _pager.TransactionBegan();
 				tx.AddPagerState(state);
@@ -271,6 +274,10 @@ namespace Voron
 			{
 				if (txLockTaken)
 					_txWriter.Release();
+
+				if(tx != null)
+					tx.Dispose();
+
 				throw;
 			}
 		}
