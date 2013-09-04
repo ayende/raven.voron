@@ -90,9 +90,47 @@ namespace Voron.Impl
 
 			if (tx != null)
 			{
-				tx.Environment.FreeSpaceHandling.EnsureFreeSpaceTrackingHasEnoughSpace(this, ref tx.NextPageNumber);
+				EnsureFreeSpaceTrackingHasEnoughSpace(tx, pageCount);
 			}
         }
+
+		private void EnsureFreeSpaceTrackingHasEnoughSpace(Transaction tx, int pageCount)
+		{
+			if (tx.Environment.FreeSpaceHandling.MaxNumberOfPages >= NumberOfAllocatedPages)
+				return;
+
+			var requiredSize = UnmanagedBits.CalculateSizeInBytesForAllocation(2 * NumberOfAllocatedPages, PageSize);
+			var requiredPages = (long)Math.Ceiling((float)requiredSize / PageSize);
+			// we always allocate twice as much as we actually need, because we don't 
+
+			// we request twice because it would likely be easier to find two smaller pieces than one big piece
+			var firstBufferPageStart = tx.Environment.FreeSpaceHandling.Find(requiredPages);
+			var secondBufferPageStart = tx.Environment.FreeSpaceHandling.Find(requiredPages);
+
+			// this is a bit of a hack, because we modify the NextPageNumber just before
+			// the tx is going to modify it, too.
+			// However, this is currently safe because the tx will just add to its current value
+			// so we can do that. However, note that we need to skip the range that it is _currently_
+			// allocating
+			if (firstBufferPageStart == -1)
+			{
+				firstBufferPageStart = tx.NextPageNumber;
+				tx.NextPageNumber += requiredPages;
+			}
+
+			if (secondBufferPageStart == -1)
+			{
+				secondBufferPageStart = tx.NextPageNumber;
+				tx.NextPageNumber += requiredPages;
+			}
+
+			if (pageCount + tx.NextPageNumber >= NumberOfAllocatedPages)
+				throw new InvalidOperationException(
+					"BUG, cannot find space for free space during file growth because the required size was too big even after the re-growth");
+
+			tx.Environment.FreeSpaceHandling.MoveTo(firstBufferPageStart, secondBufferPageStart, NumberOfAllocatedPages,
+			                                        requiredPages, PageSize);
+		}
 
 	    public virtual void Dispose()
         {

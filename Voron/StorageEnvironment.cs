@@ -63,11 +63,18 @@ namespace Voron
 				WriteEmptyHeaderPage(_pager.Get(null, 0));
 				WriteEmptyHeaderPage(_pager.Get(null, 1));
 
-				long initializingNextPageNumber = 2;
+				var freeSpaceHeader = new FreeSpaceHeader
+					{
+						FirstBufferPageNumber = 2,
+						SecondBufferPageNumber = 3,
+						NumberOfPagesTakenForTracking = 1,
+						NumberOfTrackedPages = _pager.NumberOfAllocatedPages,
+						PageSize = _pager.PageSize
+					};
 
-				FreeSpaceHandling.EnsureFreeSpaceTrackingHasEnoughSpace(_pager, ref initializingNextPageNumber);
+				FreeSpaceHandling.Initialize(&freeSpaceHeader);
 
-				NextPageNumber = initializingNextPageNumber;
+				NextPageNumber = 4;
 
 				using (var tx = new Transaction(_pager, this, _transactionsCounter + 1, TransactionFlags.ReadWrite, FreeSpaceHandling))
 				{
@@ -91,6 +98,7 @@ namespace Voron
 			_transactionsCounter = entry->TransactionId + 1;
 			using (var tx = new Transaction(_pager, this, _transactionsCounter + 1, TransactionFlags.ReadWrite, FreeSpaceHandling))
 			{
+				//TODO arek - check free space handling start on existing storage
 				var root = Tree.Open(tx, _sliceComparer, &entry->Root);
 
 				// important to first create the  tree, then set it on the env
