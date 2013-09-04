@@ -8,7 +8,7 @@ namespace Voron.Impl.FreeSpace
 	/// [dirty_flag][free_pages_bits][modification_bits]
 	/// dirty_flag - an integer value (4 bytes) indicating if buffer is dirty or nor
 	/// free_pages_bits - an array of bits that reflect if page is free (true) or not (false)
-	/// modification_bits - any modification in a continuous range of 32784 free_pages_bit (which is 4096 [pageSize] bytes of data) is reflected as one bit
+	/// modification_bits - any modification in a continuous range of 32784 free_pages_bits (which is 4096 [pageSize] bytes of data) is reflected as one bit
 	///
 	/// Notes: 
 	/// - we always allocate twice a much memory as we actually need to track numberOfPages. That's why we calculate maximum numbers of pages that we can track here
@@ -36,13 +36,14 @@ namespace Voron.Impl.FreeSpace
 
 			_capacity = NumberOfBitsForAllocatedSizeInBytes(sizeForBits);
 
-			_allModificationBits = (long) Math.Ceiling((float) sizeForBits/pageSize);
+			_allModificationBits = DivideAndRoundUp(sizeForBits, pageSize);
 			_maxNumberOfPages = _capacity - NumberOfBitsForAllocatedSizeInBytes(BytesTakenByModificationBits);
 
 			Debug.Assert(_allModificationBits >= 1);
 			Debug.Assert(_maxNumberOfPages >= 1);
+			Debug.Assert(numberOfPages <= _maxNumberOfPages);
 
-			_modificationBitsPtr = _freePagesPtr + _maxNumberOfPages /sizeof(int);
+			_modificationBitsPtr = _freePagesPtr + _maxNumberOfPages/(sizeof (int)*8);
 
 			_numberOfPages = numberOfPages;
 			_pageSize = pageSize;
@@ -81,7 +82,7 @@ namespace Voron.Impl.FreeSpace
 
 		public long BytesTakenByModificationBits
 		{
-			get { return (long) Math.Ceiling((float) _allModificationBits/8); }
+			get { return sizeof(int) * DivideAndRoundUp(_allModificationBits, 32); }
 		}
 
 		public bool IsDirty
@@ -98,9 +99,8 @@ namespace Voron.Impl.FreeSpace
 		public void MarkPage(long page, bool val)
 		{
 			SetBit(_freePagesPtr, page, val);
-			SetBit(_modificationBitsPtr, page / _pageSize, true); // mark dirty
+			SetBit(_modificationBitsPtr, page / (_pageSize * 8), true); // mark dirty
 		}
-
 
 		public void ResetModifiedPages()
 		{
@@ -131,10 +131,12 @@ namespace Voron.Impl.FreeSpace
 
 		public static long CalculateSizeInBytesForAllocation(long numberOfPages, int pageSize)
 		{
-			return GetSizeInBytesFor(
-				sizeof(int) + // dirty bit - but need it aligned
-				numberOfPages + // pages
-				Math.Min(1, numberOfPages / pageSize)); // modified pages
+			var dirtyFlag = sizeof (int);
+			var sizeForFreePages = GetSizeInBytesFor(numberOfPages);
+			var numberOfModificationBits = DivideAndRoundUp(sizeForFreePages, pageSize);
+			var sizeForModificationBits = sizeof (int)*DivideAndRoundUp(numberOfModificationBits, 32);
+
+			return dirtyFlag + sizeForFreePages + sizeForModificationBits;
 		}
 
 		public static long NumberOfBitsForAllocatedSizeInBytes(long allocatedBytes)
@@ -154,15 +156,26 @@ namespace Voron.Impl.FreeSpace
 			NativeMethods.memcpy(other._rawPtr, _rawPtr, (int)_sizeInBytes);
 		}
 
-		public void CopyDirtyPagesTo(UnmanagedBits other)
+		public long CopyDirtyPagesTo(UnmanagedBits other)
 		{
+			var copied = 0;
+
 			for (int i = 0; i < ModificationBitsInUse; i++)
 			{
 				if (GetBit(_modificationBitsPtr, ModificationBitsInUse, i) == false)
 					continue;
 
-				NativeMethods.memcpy((byte*)other._freePagesPtr + (_pageSize * i), (byte*)_freePagesPtr + (_pageSize * i), _pageSize);
+				int toCopy = _pageSize;
+
+				if (i == ModificationBitsInUse - 1) // last piece of free bits can take less bytes than pageSize
+					toCopy = (int) DivideAndRoundUp(_numberOfPages - (_pageSize*i*8), 8);
+
+				NativeMethods.memcpy((byte*)other._freePagesPtr + (_pageSize * i), (byte*)_freePagesPtr + (_pageSize * i), toCopy);
+
+				copied += toCopy;
 			}
+
+			return copied;
 		}
 
 		public bool IsFree(long pos)
@@ -178,6 +191,11 @@ namespace Voron.Impl.FreeSpace
 			// move all modified pages
 			NativeMethods.memmove((byte*) other._modificationBitsPtr, (byte*) _modificationBitsPtr,
 			                      (int) BytesTakenByModificationBits);
+		}
+
+		private static long DivideAndRoundUp(long numerator, long denominator)
+		{
+			return (numerator + denominator - 1) / denominator;
 		}
 	}
 }
