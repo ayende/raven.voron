@@ -18,13 +18,23 @@ namespace Voron.Impl.FreeSpace
 		private long _lastSearchPosition = -1;
 		private bool initialized;
 
-		public decimal MaxNumberOfPages
+		public long MaxNumberOfPages
 		{
 			get
 			{
 				Debug.Assert((bits[0] == null && bits[1] == null) || (bits[0].MaxNumberOfPages == bits[1].MaxNumberOfPages));
 
 				return bits[0] != null ? bits[0].MaxNumberOfPages : 0;
+			}
+		}
+
+		public decimal NumberOfTrackedPages
+		{
+			get
+			{
+				Debug.Assert((bits[0] == null && bits[1] == null) || (bits[0].NumberOfTrackedPages == bits[1].NumberOfTrackedPages));
+
+				return bits[0] != null ? bits[0].NumberOfTrackedPages : 0;
 			}
 		}
 
@@ -245,6 +255,14 @@ namespace Voron.Impl.FreeSpace
 			freeSpaceHeader->NumberOfTrackedPages = state.NumberOfTrackedPages;
 			freeSpaceHeader->NumberOfPagesTakenForTracking = state.NumberOfPagesTakenForTracking;
 			freeSpaceHeader->PageSize = state.PageSize;
+		}
+
+		public void TrackMorePages(long newNumberOfPagesToTrack)
+		{
+			foreach (var unmanagedBits in bits)
+			{
+				unmanagedBits.IncreaseSize(newNumberOfPagesToTrack);
+			}
 		}
 	}
 }

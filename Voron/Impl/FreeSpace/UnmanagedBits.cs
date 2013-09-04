@@ -20,7 +20,7 @@ namespace Voron.Impl.FreeSpace
 		private readonly long _capacity;
 		private readonly long _allModificationBits;
 		private readonly long _maxNumberOfPages;
-		private readonly long _numberOfPages;
+		private  long _numberOfPages;
 		private readonly int _pageSize;
 		private readonly int* _freePagesPtr;
 		private readonly int* _modificationBitsPtr;
@@ -196,6 +196,19 @@ namespace Voron.Impl.FreeSpace
 		private static long DivideAndRoundUp(long numerator, long denominator)
 		{
 			return (numerator + denominator - 1) / denominator;
+		}
+
+		public void IncreaseSize(long newNumberOfPagesToTrack)
+		{
+			if (_maxNumberOfPages < newNumberOfPagesToTrack)
+				throw new InvalidOperationException(
+					string.Format(
+						"Cannot increase the size of unmanaged bits buffer to {0}, because it can contains only {1} number of bits",
+						newNumberOfPagesToTrack, _maxNumberOfPages));
+
+			_numberOfPages = newNumberOfPagesToTrack;
+
+			_modificationBitsInUse = (long)Math.Ceiling((_numberOfPages / 8f) / _pageSize);
 		}
 	}
 }

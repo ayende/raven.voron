@@ -97,7 +97,13 @@ namespace Voron.Impl
 		private void EnsureFreeSpaceTrackingHasEnoughSpace(Transaction tx, int pageCount)
 		{
 			if (tx.Environment.FreeSpaceHandling.MaxNumberOfPages >= NumberOfAllocatedPages)
+			{
+				if (NumberOfAllocatedPages > tx.Environment.FreeSpaceHandling.NumberOfTrackedPages)
+				{
+					tx.Environment.FreeSpaceHandling.TrackMorePages(NumberOfAllocatedPages);
+				}
 				return;
+			}
 
 			var requiredSize = UnmanagedBits.CalculateSizeInBytesForAllocation(2 * NumberOfAllocatedPages, PageSize);
 			var requiredPages = (long)Math.Ceiling((float)requiredSize / PageSize);
