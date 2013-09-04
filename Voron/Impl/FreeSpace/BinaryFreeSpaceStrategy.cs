@@ -158,7 +158,7 @@ namespace Voron.Impl.FreeSpace
 			return rangeStart;
 		}
 
-		public unsafe void MoveTo(FreeSpaceHeader header)
+		private unsafe void MoveTo(FreeSpaceHeader header)
 		{
 			var newFirstBuffer = new UnmanagedBits((byte*) acquirePagePointer(header.FirstBufferPageNumber),
 			                                       header.FirstBufferPageNumber,
@@ -177,9 +177,23 @@ namespace Voron.Impl.FreeSpace
 			bits[1].MoveTo(newSecondBuffer);
 			bits[1] = newSecondBuffer;
 
-			state = header;
+			// mark pages taken by old buffers as free
+			var oldHeader = state;
 
-			//todo mark old pages as free
+			for (var i = oldHeader.FirstBufferPageNumber; i < oldHeader.FirstBufferPageNumber + oldHeader.NumberOfPagesTakenForTracking; i++)
+			{
+				bits[0].MarkPage(i, true);
+				bits[1].MarkPage(i, true);
+			}
+
+			for (var i = oldHeader.SecondBufferPageNumber; i < oldHeader.SecondBufferPageNumber + oldHeader.NumberOfPagesTakenForTracking; i++)
+			{
+				bits[0].MarkPage(i, true);
+				bits[1].MarkPage(i, true);
+			}
+
+			// update header
+			state = header;
 		}
 
 		public void RegisterFreePages(List<long> freedPages)
@@ -236,13 +250,13 @@ namespace Voron.Impl.FreeSpace
 			// allocating
 			if (firstBufferPageStart == -1)
 			{
-				firstBufferPageStart = nextPageNumber; // TODO arek: Verify that!
+				firstBufferPageStart = nextPageNumber;
 				nextPageNumber += requiredPages;
 			}
 
 			if (secondBufferPageStart == -1)
 			{
-				secondBufferPageStart = nextPageNumber; // TODO arek: and this as well!
+				secondBufferPageStart = nextPageNumber;
 				nextPageNumber += requiredPages;
 			}
 
