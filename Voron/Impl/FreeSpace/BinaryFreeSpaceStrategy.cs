@@ -173,7 +173,6 @@ namespace Voron.Impl.FreeSpace
 			                                        numberOfPagesForTracking*pageSize,
 			                                        numberOfPagesToTrack,
 			                                        pageSize);
-			bits[0].MoveTo(newFirstBuffer);
 			bits[1].MoveTo(newSecondBuffer);
 			bits[1] = newSecondBuffer;
 
