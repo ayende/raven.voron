@@ -27,9 +27,10 @@ namespace Voron.Tests.Util
 
 					Assert.Equal(320, bits.NumberOfTrackedPages);
 					Assert.Equal(32728, bits.MaxNumberOfPages);
-					Assert.Equal(1, bits.ModificationBits);
-					Assert.Equal(1, bits.ModificationBytes);
-					Assert.Equal(32736, bits.MaxNumberOfPages + (bits.ModificationBytes * 8));
+					Assert.Equal(1, bits.AllModificationBits);
+					Assert.Equal(1, bits.ModificationBitsInUse);
+					Assert.Equal(1, bits.BytesTakenByModificationBits);
+					Assert.Equal(32736, bits.MaxNumberOfPages + (bits.BytesTakenByModificationBits * 8));
 				}
 			}
 		}
@@ -45,13 +46,14 @@ namespace Voron.Tests.Util
 			{
 				fixed (byte* ptr = bytes)
 				{
-					var bits = new UnmanagedBits(ptr, 0, bytes.Length, 320, pageSize);
+					var bits = new UnmanagedBits(ptr, 0, bytes.Length, 40000, pageSize);
 
-					Assert.Equal(320, bits.NumberOfTrackedPages);
+					Assert.Equal(40000, bits.NumberOfTrackedPages);
 					Assert.Equal(65496, bits.MaxNumberOfPages);
-					Assert.Equal(2, bits.ModificationBits);
-					Assert.Equal(1, bits.ModificationBytes);
-					Assert.Equal(65504, bits.MaxNumberOfPages + (bits.ModificationBytes * 8));
+					Assert.Equal(2, bits.AllModificationBits);
+					Assert.Equal(2, bits.ModificationBitsInUse);
+					Assert.Equal(1, bits.BytesTakenByModificationBits);
+					Assert.Equal(65504, bits.MaxNumberOfPages + (bits.BytesTakenByModificationBits * 8));
 				}
 			}
 		}
@@ -67,13 +69,14 @@ namespace Voron.Tests.Util
 			{
 				fixed (byte* ptr = bytes)
 				{
-					var bits = new UnmanagedBits(ptr, 0, bytes.Length, 320, pageSize);
+					var bits = new UnmanagedBits(ptr, 0, bytes.Length, 90000, pageSize);
 
-					Assert.Equal(320, bits.NumberOfTrackedPages);
+					Assert.Equal(90000, bits.NumberOfTrackedPages);
 					Assert.Equal(327632, bits.MaxNumberOfPages);
-					Assert.Equal(10, bits.ModificationBits);
-					Assert.Equal(2, bits.ModificationBytes);
-					Assert.Equal(327648, bits.MaxNumberOfPages + (bits.ModificationBytes * 8));
+					Assert.Equal(10, bits.AllModificationBits);
+					Assert.Equal(3, bits.ModificationBitsInUse);
+					Assert.Equal(2, bits.BytesTakenByModificationBits);
+					Assert.Equal(327648, bits.MaxNumberOfPages + (bits.BytesTakenByModificationBits * 8));
 				}
 			}
 		}
