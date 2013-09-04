@@ -8,7 +8,7 @@ namespace Voron.Impl.FreeSpace
 		private readonly byte* _rawPtr;
 		private readonly long _sizeInBytes;
 		private readonly long _capacity;
-		private readonly long _maxNumberOfDirtyBits;
+		private readonly long _modificationBits;
 		private readonly long _maxNumberOfPages;
 		private readonly long _numberOfPages;
 		private readonly int _pageSize;
@@ -16,24 +16,22 @@ namespace Voron.Impl.FreeSpace
 		private readonly int* _dirtyFreePagesPtr;
 		private readonly long _startPageNumber;
 
-		public long NumberOfTrackedPages { get { return _numberOfPages; } }
-
-		private long NumberOfDirtyPages { get { return (_capacity + _pageSize - 1) / _pageSize; } }
-
 		public UnmanagedBits(byte* ptr, long startPageNumber, long sizeInBytes, long numberOfPages, int pageSize)
 		{
 			_rawPtr = ptr;
 			_freePagesPtr = (int*)_rawPtr + sizeof(int);
 
-			_capacity = NumberOfBitsForAllocatedSizeInBytes(sizeInBytes - sizeof(int));
+			var sizeForBits = (sizeInBytes - sizeof (int)); // minus dirty flag
 
-			_maxNumberOfDirtyBits = (_capacity + pageSize - 1) / pageSize;
-			_maxNumberOfPages = _capacity - _maxNumberOfDirtyBits;
+			_capacity = NumberOfBitsForAllocatedSizeInBytes(sizeForBits);
 
-			Debug.Assert(_maxNumberOfDirtyBits >= 1);
+			_modificationBits = (sizeForBits + pageSize - 1) / pageSize;
+			_maxNumberOfPages = _capacity - (ModificationBytes * 8);
+
+			Debug.Assert(_modificationBits >= 1);
 			Debug.Assert(_maxNumberOfPages >= 1);
 
-			_dirtyFreePagesPtr = _freePagesPtr + _maxNumberOfPages;
+			_dirtyFreePagesPtr = _freePagesPtr + _maxNumberOfPages /sizeof(int);
 
 			_numberOfPages = numberOfPages;
 			_pageSize = pageSize;
@@ -41,6 +39,11 @@ namespace Voron.Impl.FreeSpace
 			_startPageNumber = startPageNumber;
 
 			NativeMethods.memset(_rawPtr, 0, (int)_sizeInBytes); // clean all bits
+		}
+
+		public long NumberOfTrackedPages
+		{
+			get { return _numberOfPages; }
 		}
 
 		public long MaxNumberOfPages
@@ -51,6 +54,16 @@ namespace Voron.Impl.FreeSpace
 		public long StartPageNumber
 		{
 			get { return _startPageNumber; }
+		}
+
+		public long ModificationBits
+		{
+			get { return _modificationBits; }
+		}
+
+		public long ModificationBytes
+		{
+			get { return (_modificationBits + 8 - 1) / 8; }
 		}
 
 		public bool IsDirty
@@ -73,7 +86,7 @@ namespace Voron.Impl.FreeSpace
 
 		public void ResetModifiedPages()
 		{
-			for (int i = 0; i < NumberOfDirtyPages; i++)
+			for (int i = 0; i < ModificationBits; i++)
 			{
 				SetBit(_dirtyFreePagesPtr, i, false); // mark clean
 			}
@@ -125,9 +138,9 @@ namespace Voron.Impl.FreeSpace
 
 		public void CopyDirtyPagesTo(UnmanagedBits other)
 		{
-			for (int i = 0; i < NumberOfDirtyPages; i++)
+			for (int i = 0; i < ModificationBits; i++)
 			{
-				if (GetBit(_dirtyFreePagesPtr, NumberOfDirtyPages, i) == false)
+				if (GetBit(_dirtyFreePagesPtr, ModificationBits, i) == false)
 					continue;
 
 				NativeMethods.memcpy((byte*)other._freePagesPtr + (_pageSize * i), (byte*)_freePagesPtr + (_pageSize * i), _pageSize);
@@ -146,7 +159,7 @@ namespace Voron.Impl.FreeSpace
 
 			// move all modified pages
 			NativeMethods.memmove((byte*)other._dirtyFreePagesPtr, (byte*)_dirtyFreePagesPtr,
-								  (int)(GetSizeInBytesFor(NumberOfDirtyPages)));
+								  (int)(GetSizeInBytesFor(ModificationBits)));
 		}
 	}
 }
