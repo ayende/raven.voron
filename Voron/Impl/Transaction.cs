@@ -180,8 +180,6 @@ namespace Voron.Impl
 
 			FlushAllMultiValues();
 
-			// freeSpaceHandling.FlushFreeState(this); TODO arek check this
-
 			foreach (var kvp in _treesInfo)
 			{
 				var txInfo = kvp.Value;
