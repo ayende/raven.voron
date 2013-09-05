@@ -146,7 +146,10 @@ namespace Voron.Impl.FreeSpace
 				searched++;
 
 				if (_lastSearchPosition >= _current.NumberOfTrackedPages - 1)
+				{
 					_lastSearchPosition = -1;
+					break;
+				}
 
 				_lastSearchPosition++;
 
