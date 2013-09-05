@@ -188,7 +188,7 @@ namespace Voron.Impl.FreeSpace
 		public void SetBufferPointer(byte* ptr)
 		{
 			rawPtr = ptr;
-			freePagesPtr = (int*)rawPtr + DirtyFlag;
+			freePagesPtr = (int*)(rawPtr + DirtyFlag);
 
 			var numberOfIntValuesReservedForFreeBits = MaxNumberOfPages / 32;
 
