@@ -102,6 +102,12 @@ namespace Voron.Impl
 				{
 					tx.Environment.FreeSpaceHandling.TrackMorePages(NumberOfAllocatedPages);
 				}
+
+				// even if we don't need to allocate more pages for free space handling and move the buffers
+				// we have to update pointers of buffers because when we allocate new pages we change the PagerState
+				// used by an acquisition of  page pointers
+				tx.Environment.FreeSpaceHandling.UpdateBufferPointers();
+
 				return;
 			}
 

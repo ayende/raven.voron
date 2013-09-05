@@ -64,6 +64,12 @@ namespace Voron.Impl.FreeSpace
 			initialized = true;
 		}
 
+		public unsafe void UpdateBufferPointers()
+		{
+			bits[0].SetBufferPointer((byte*)acquirePagePointer(state.FirstBufferPageNumber).ToPointer());
+			bits[1].SetBufferPointer((byte*)acquirePagePointer(state.SecondBufferPageNumber).ToPointer());
+		}
+
 		public Page TryAllocateFromFreeSpace(Transaction tx, int num)
 		{
 			if (initialized == false)

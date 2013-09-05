@@ -15,15 +15,15 @@ namespace Voron.Impl.FreeSpace
 	/// </summary>
 	public unsafe class UnmanagedBits
 	{
-		private readonly byte* _rawPtr;
+		private byte* _rawPtr;
 		private readonly long _sizeInBytes;
 		private readonly long _capacity;
 		private readonly long _allModificationBits;
 		private readonly long _maxNumberOfPages;
 		private  long _numberOfPages;
 		private readonly int _pageSize;
-		private readonly int* _freePagesPtr;
-		private readonly int* _modificationBitsPtr;
+		private int* _freePagesPtr;
+		private int* _modificationBitsPtr;
 		private readonly long _startPageNumber;
 		private long _modificationBitsInUse;
 
@@ -209,6 +209,14 @@ namespace Voron.Impl.FreeSpace
 			_numberOfPages = newNumberOfPagesToTrack;
 
 			_modificationBitsInUse = (long)Math.Ceiling((_numberOfPages / 8f) / _pageSize);
+		}
+
+		public void SetBufferPointer(byte* ptr)
+		{
+			_rawPtr = ptr;
+			_freePagesPtr = (int*)_rawPtr + sizeof(int);
+
+			_modificationBitsPtr = _freePagesPtr + _maxNumberOfPages / (sizeof(int) * 8);
 		}
 	}
 }
