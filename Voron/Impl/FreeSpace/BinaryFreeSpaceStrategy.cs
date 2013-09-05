@@ -38,6 +38,11 @@ namespace Voron.Impl.FreeSpace
 			}
 		}
 
+		internal UnmanagedBits CurrentBuffer
+		{
+			get { return _current; }
+		}
+
 		public BinaryFreeSpaceStrategy(Func<long, IntPtr> acquirePagePointer)
 		{
 			this.acquirePagePointer = acquirePagePointer;
@@ -70,7 +75,7 @@ namespace Voron.Impl.FreeSpace
 			bits[1].SetBufferPointer((byte*)acquirePagePointer(state.SecondBufferPageNumber).ToPointer());
 		}
 
-		public Page TryAllocateFromFreeSpace(Transaction tx, int num)
+		public Page TryAllocateFromFreeSpace(Transaction tx, int numberOfPages)
 		{
 			if (initialized == false)
 				return null; // this can happen the first time free space is initialized
@@ -78,7 +83,7 @@ namespace Voron.Impl.FreeSpace
 			if(_current == null)
 				throw new ArgumentNullException("_current", "The current buffer for transaction is null. Did you forget to set buffer for transaction?");
 
-			var page = Find(num);
+			var page = Find(numberOfPages);
 
 			if (page == -1)
 				return null;
@@ -254,8 +259,6 @@ namespace Voron.Impl.FreeSpace
 
 			return range;
 		}
-
-		
 
 		public unsafe void CopyStateTo(FreeSpaceHeader* freeSpaceHeader)
 		{

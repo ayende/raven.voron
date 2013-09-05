@@ -9,7 +9,7 @@ namespace Voron.Impl
         PagerState PagerState { get; }
 
 		byte* AcquirePagePointer(long pageNumber);
-        Page Get(Transaction tx, long n, bool errorOnChange = false);
+        Page Get(Transaction tx, long pageNumber, bool errorOnChange = false);
 		void AllocateMorePages(Transaction tx, long newLength);
 
         Page TempPage { get; }

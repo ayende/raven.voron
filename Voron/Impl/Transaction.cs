@@ -139,16 +139,16 @@ namespace Voron.Impl
 			return _pager.Get(this, n);
 		}
 
-		public Page AllocatePage(int num)
+		public Page AllocatePage(int numberOfPages)
 		{
-			Page page = freeSpaceHandling.TryAllocateFromFreeSpace(this, num);
+			Page page = freeSpaceHandling.TryAllocateFromFreeSpace(this, numberOfPages);
 			if (page == null) // allocate from end of file
 			{
-				if (num > 1)
-					_pager.EnsureContinuous(this, NextPageNumber, num);
+				if (numberOfPages > 1)
+					_pager.EnsureContinuous(this, NextPageNumber, numberOfPages);
 				page = _pager.Get(this, NextPageNumber);
 				page.PageNumber = NextPageNumber;
-				NextPageNumber += num;
+				NextPageNumber += numberOfPages;
 			}
 			page.Lower = (ushort)Constants.PageHeaderSize;
 			page.Upper = (ushort)_pager.PageSize;
