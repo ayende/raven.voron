@@ -199,6 +199,11 @@ namespace Voron
 
 		public void Dispose()
 		{
+			foreach (var activeTransaction in _activeTransactions)
+			{
+				activeTransaction.Value.Dispose();
+			}
+
 			if (_ownsPager)
 				_pager.Dispose();
 		}
@@ -255,8 +260,6 @@ namespace Voron
 		{
 			bool txLockTaken = false;
 
-			Transaction tx = null;
-
 			try
 			{
 				long txId = _transactionsCounter;
@@ -266,7 +269,7 @@ namespace Voron
 					_txWriter.Wait();
 					txLockTaken = true;
 				}
-				tx = new Transaction(_pager, this, txId, flags, FreeSpaceHandling);
+				var tx = new Transaction(_pager, this, txId, flags, FreeSpaceHandling);
 				_activeTransactions.TryAdd(txId, tx);
 				var state = _pager.TransactionBegan();
 				tx.AddPagerState(state);
@@ -283,9 +286,6 @@ namespace Voron
 			{
 				if (txLockTaken)
 					_txWriter.Release();
-
-				if(tx != null)
-					tx.Dispose();
 
 				throw;
 			}
