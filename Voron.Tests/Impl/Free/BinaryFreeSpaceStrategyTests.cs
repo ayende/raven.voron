@@ -207,6 +207,31 @@ namespace Voron.Tests.Impl.Free
 			Assert.False(freeSpace.CurrentBuffer.IsFree(9));
 		}
 
+		[Fact]
+		public void SearchingFreePagesShouldWorkInCycle()
+		{
+			const int tx1 = 0;
+			freeSpace.SetBufferForTransaction(tx1);
+
+			freeSpace.RegisterFreePages(new List<long> {6, 7, 8, 9});
+			freeSpace.OnCommit();
+
+			var firstFreePage = freeSpace.Find(2);
+			Assert.Equal(6, firstFreePage);
+
+			// free pages from the beginning
+			freeSpace.RegisterFreePages(new List<long> {0, 1});
+			freeSpace.OnCommit();
+
+			// move search pointer at the end
+			firstFreePage = freeSpace.Find(2);
+			Assert.Equal(8, firstFreePage);
+
+			// should take from the begin
+			firstFreePage = freeSpace.Find(2);
+			Assert.Equal(0, firstFreePage);
+		}
+
 		public void Dispose()
 		{
 			pager.Dispose();
