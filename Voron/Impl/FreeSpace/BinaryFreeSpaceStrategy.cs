@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using Voron.Impl.FileHeaders;
 using Voron.Trees;
 
@@ -9,6 +10,60 @@ namespace Voron.Impl.FreeSpace
 {
 	public class BinaryFreeSpaceStrategy
 	{
+		public class FreeSpaceInfo
+		{
+			private readonly BinaryFreeSpaceStrategy strategy;
+
+			public FreeSpaceInfo(BinaryFreeSpaceStrategy strategy)
+			{
+				this.strategy = strategy;
+			}
+
+			public List<long> GetBuffersPages()
+			{
+				var range = new List<long>();
+
+				var buffer1 = strategy.bits[0];
+				var buffer2 = strategy.bits[1];
+
+				for (var i = buffer1.StartPageNumber; i < buffer1.StartPageNumber + strategy.state.NumberOfPagesTakenForTracking; i++)
+				{
+					range.Add(i);
+				}
+
+				for (var i = buffer2.StartPageNumber; i < buffer2.StartPageNumber + strategy.state.NumberOfPagesTakenForTracking; i++)
+				{
+					range.Add(i);
+				}
+
+				return range;
+			}
+
+			public List<long> GetFreePages(long? transactionNumber)
+			{
+				UnmanagedBits buffer;
+
+				if (transactionNumber != null)
+				{
+					buffer = strategy.bits[transactionNumber.Value & 1]; // take buffer specific for transaction
+				}
+				else
+				{
+					buffer = strategy.bits.First(x => x.IsDirty == false); // take buffer that is not in use
+				}
+
+				var result = new List<long>();
+
+				for (var i = 0; i < buffer.NumberOfTrackedPages; i++)
+				{
+					if (buffer.IsFree(i))
+						result.Add(i);
+				}
+
+				return result;
+			}
+		}
+
 		private readonly Func<long, IntPtr> acquirePagePointer;
 		private readonly UnmanagedBits[] bits = new UnmanagedBits[2];
 		private readonly List<long> registeredFreedPages = new List<long>();
@@ -17,6 +72,7 @@ namespace Voron.Impl.FreeSpace
 		private UnmanagedBits _current;
 		private long _lastSearchPosition = -1;
 		private bool initialized;
+		private FreeSpaceInfo _info;
 
 		public long MaxNumberOfPages
 		{
@@ -41,6 +97,11 @@ namespace Voron.Impl.FreeSpace
 		internal UnmanagedBits CurrentBuffer
 		{
 			get { return _current; }
+		}
+
+		public FreeSpaceInfo Info
+		{
+			get { return _info ?? (_info = new FreeSpaceInfo(this)); }
 		}
 
 		public BinaryFreeSpaceStrategy(Func<long, IntPtr> acquirePagePointer)

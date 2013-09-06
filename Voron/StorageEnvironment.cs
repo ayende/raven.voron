@@ -377,8 +377,8 @@ namespace Voron
             var results = new Dictionary<string, List<long>>(StringComparer.OrdinalIgnoreCase)
 				{
 					{"Root", Root.AllPages(tx)},
-					//{"Free Space Overhead", FreeSpaceRoot.AllPages(tx)}, //TODO arek
-					//{"Free Pages", _freeSpaceRepository.AllPages(tx)}
+					{"Free Space Overhead", FreeSpaceHandling.Info.GetBuffersPages()},
+					{"Free Pages", FreeSpaceHandling.Info.GetFreePages(tx.Id)}
 				};
 
             foreach (var tree in _trees)
@@ -393,8 +393,8 @@ namespace Voron
 		{
 			return new EnvironmentStats
 				{
-					//FreePages = _freeSpaceRepository.GetFreePageCount(), // TODO arek
-					//FreePagesOverhead = FreeSpaceRoot.State.PageCount,
+					FreePages = FreeSpaceHandling.Info.GetFreePages(null).Count,
+					FreePagesOverhead = FreeSpaceHandling.Info.GetBuffersPages().Count,
 					RootPages = Root.State.PageCount,
 					HeaderPages = 2,
 					UnallocatedPagesAtEndOfFile = _pager.NumberOfAllocatedPages - NextPageNumber
