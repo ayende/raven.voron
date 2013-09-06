@@ -189,7 +189,8 @@ namespace Voron.Impl.FreeSpace
 			                                       numberOfPagesForTracking*pageSize,
 			                                       numberOfPagesToTrack,
 			                                       pageSize);
-			bits[0].MoveTo(newFirstBuffer);
+
+			bits[0].CopyAllTo(newFirstBuffer); // we cannot just copy because a new buffer is bigger
 			bits[0] = newFirstBuffer;
 
 			var newSecondBuffer = new UnmanagedBits((byte*) acquirePagePointer(secondBufferPageStart),
@@ -197,7 +198,7 @@ namespace Voron.Impl.FreeSpace
 			                                        numberOfPagesForTracking*pageSize,
 			                                        numberOfPagesToTrack,
 			                                        pageSize);
-			bits[1].MoveTo(newSecondBuffer);
+			bits[1].CopyAllTo(newSecondBuffer);
 			bits[1] = newSecondBuffer;
 
 			// mark pages that was taken by old buffers as free

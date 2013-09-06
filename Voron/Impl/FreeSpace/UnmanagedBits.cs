@@ -125,9 +125,30 @@ namespace Voron.Impl.FreeSpace
 
 		public void CopyAllTo(UnmanagedBits other)
 		{
-			Debug.Assert(NumberOfTrackedPages == other.NumberOfTrackedPages && sizeInBytes == other.sizeInBytes);
+			if (sizeInBytes == other.sizeInBytes)
+			{
+				Debug.Assert(NumberOfTrackedPages == other.NumberOfTrackedPages && AllModificationBits == other.AllModificationBits);
 
-			NativeMethods.memcpy(other.rawPtr, rawPtr, (int)sizeInBytes);
+				NativeMethods.memcpy(other.rawPtr, rawPtr, (int) sizeInBytes);
+			}
+			else
+			{
+				if (sizeInBytes > other.sizeInBytes)
+					throw new InvalidOperationException(
+						string.Format(
+							"Cannot copy unmanaged bits because the size of a buffer is not enough. The size of buffer that is being copied is {0} while the size of buffer where it should be copied is {1}",
+							sizeInBytes, other.sizeInBytes));
+
+				// here we need to split the data that we copy because the size of buffers is different what means
+				// that the pointers of the modification bits have different positions relative to the beginning of a buffer
+
+				// copy dirty bit and all free pages
+				NativeMethods.memcpy(other.rawPtr, rawPtr, (int)(GetSizeInBytesFor(NumberOfTrackedPages) + DirtyFlag));
+
+				// copy all modification bits
+				NativeMethods.memcpy((byte*)other.modificationBitsPtr, (byte*)modificationBitsPtr,
+									  (int)BytesTakenByModificationBits);
+			}
 		}
 
 		public long CopyDirtyPagesTo(UnmanagedBits other)
@@ -155,16 +176,6 @@ namespace Voron.Impl.FreeSpace
 		public bool IsFree(long pos)
 		{
 			return GetBit(freePagesPtr, NumberOfTrackedPages, pos);
-		}
-
-		public void MoveTo(UnmanagedBits other)
-		{
-			// move dirty bit and all free pages
-			NativeMethods.memmove(other.rawPtr, rawPtr, (int)(GetSizeInBytesFor(NumberOfTrackedPages) + DirtyFlag));
-
-			// move all modified pages
-			NativeMethods.memmove((byte*)other.modificationBitsPtr, (byte*)modificationBitsPtr,
-								  (int)BytesTakenByModificationBits);
 		}
 
 		private static long DivideAndRoundUp(long numerator, long denominator)

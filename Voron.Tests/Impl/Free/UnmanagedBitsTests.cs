@@ -120,7 +120,7 @@ namespace Voron.Tests.Impl.Free
 			fixed (byte* ptr2 = bytes2)
 			{
 				var bits1 = new UnmanagedBits(ptr1, 0, bytes1.Length, 20, pageSize);
-				var bits2 = new UnmanagedBits(ptr2, 0, bytes1.Length, 20, pageSize);
+				var bits2 = new UnmanagedBits(ptr2, 0, bytes2.Length, 20, pageSize);
 
 				bits1.MarkPage(10, true);
 
@@ -143,7 +143,7 @@ namespace Voron.Tests.Impl.Free
 				fixed (byte* ptr2 = bytes2)
 				{
 					var bits1 = new UnmanagedBits(ptr1, 0, bytes1.Length, 60000, pageSize);
-					var bits2 = new UnmanagedBits(ptr2, 0, bytes1.Length, 60000, pageSize);
+					var bits2 = new UnmanagedBits(ptr2, 0, bytes2.Length, 60000, pageSize);
 
 					bits1.MarkPage(10, true);
 					bits1.MarkPage(40000, true);
@@ -151,6 +151,74 @@ namespace Voron.Tests.Impl.Free
 					var bytesCopied = bits1.CopyDirtyPagesTo(bits2);
 
 					Assert.Equal(4096 + 3404, bytesCopied);
+				}
+			}
+		}
+
+		[Fact]
+		public void CanCopyBufferToBufferWithTheSameSize()
+		{
+			const int pageSize = 4096;
+
+			var bytes1 = new byte[2 * pageSize];
+			var bytes2 = new byte[2 * pageSize];
+
+			fixed (byte* ptr1 = bytes1)
+			fixed (byte* ptr2 = bytes2)
+			{
+				// 65472 - is the max number of bits for buffer with size 8192 bytes
+				var bits1 = new UnmanagedBits(ptr1, 0, bytes1.Length, 65472, pageSize);
+				var bits2 = new UnmanagedBits(ptr2, 0, bytes2.Length, 65472, pageSize);
+
+				var rand = new Random();
+				var maxNumberOfChanges = rand.Next(20000, 40000);
+
+				for (int i = 0; i < maxNumberOfChanges; i++)
+				{
+					var bitToSet = rand.Next(0, 65471);
+					bits1.MarkPage(bitToSet, true);
+				}
+
+				bits1.CopyAllTo(bits2);
+
+				for (var i = 0; i < 2*pageSize; i++)
+				{
+					Assert.Equal(ptr1[i], ptr2[i]);
+				}
+			}
+		}
+
+		[Fact]
+		public void CanCopyBufferToBiggerBuffer()
+		{
+			const int pageSize = 4096;
+
+			var bytes1 = new byte[2 * pageSize];
+			var bytes2 = new byte[3 * pageSize];
+
+			fixed (byte* ptr1 = bytes1)
+			fixed (byte* ptr2 = bytes2)
+			{
+				// 65472 - is the max number of bits for buffer with size 8192 bytes
+				var bits1 = new UnmanagedBits(ptr1, 0, bytes1.Length, 65472, pageSize);
+
+				// 98240 - is the max number of bits for buffer with size 12288 bytes
+				var bits2 = new UnmanagedBits(ptr2, 0, bytes2.Length, 98240, pageSize);
+
+				var rand = new Random();
+				var maxNumberOfChanges = rand.Next(20000, 40000);
+
+				for (int i = 0; i < maxNumberOfChanges; i++)
+				{
+					var bitToSet = rand.Next(0, 65471);
+					bits1.MarkPage(bitToSet, true);
+				}
+
+				bits1.CopyAllTo(bits2);
+
+				for (var i = 0; i < 65472 / 8; i++)
+				{
+					Assert.Equal(ptr1[i], ptr2[i]);
 				}
 			}
 		}
