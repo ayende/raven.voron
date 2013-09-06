@@ -105,6 +105,7 @@ namespace Voron.Benchmark
                 using (var tx = env.NewTransaction(TransactionFlags.ReadWrite))
                 {
                     memoryMapPager.AllocateMorePages(tx, 1024 * 1024 * 768);
+					memoryMapPager.EnsureFreeSpaceTrackingHasEnoughSpace(tx, 0);
                     tx.Commit();
                 }
 
@@ -136,6 +137,7 @@ namespace Voron.Benchmark
                 using (var tx = env.NewTransaction(TransactionFlags.ReadWrite))
                 {
                     memoryMapPager.AllocateMorePages(tx, 1024 * 1024 * 768);
+					memoryMapPager.EnsureFreeSpaceTrackingHasEnoughSpace(tx, 0);
                     tx.Commit();
                 }
 
@@ -167,6 +169,7 @@ namespace Voron.Benchmark
                 using (var tx = env.NewTransaction(TransactionFlags.ReadWrite))
                 {
                     memoryMapPager.AllocateMorePages(tx, 1024 * 1024 * 768);
+					memoryMapPager.EnsureFreeSpaceTrackingHasEnoughSpace(tx, 0);
                     tx.Commit();
                 }
 
@@ -201,6 +204,7 @@ namespace Voron.Benchmark
                 using (var tx = env.NewTransaction(TransactionFlags.ReadWrite))
                 {
                     memoryMapPager.AllocateMorePages(tx, 1024 * 1024 * 768);
+					memoryMapPager.EnsureFreeSpaceTrackingHasEnoughSpace(tx, 0);
                     tx.Commit();
                 }
 
@@ -298,6 +302,7 @@ namespace Voron.Benchmark
                 using (var tx = env.NewTransaction(TransactionFlags.ReadWrite))
                 {
                     memoryMapPager.AllocateMorePages(tx, 1024 * 1024 * 768);
+					memoryMapPager.EnsureFreeSpaceTrackingHasEnoughSpace(tx, 0);
                     tx.Commit();
                 }
 

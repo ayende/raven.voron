@@ -94,7 +94,7 @@ namespace Voron.Impl
 			}
         }
 
-		private void EnsureFreeSpaceTrackingHasEnoughSpace(Transaction tx, int pageCount)
+		public void EnsureFreeSpaceTrackingHasEnoughSpace(Transaction tx, int pageCount)
 		{
 			if (tx.Environment.FreeSpaceHandling.MaxNumberOfPages >= NumberOfAllocatedPages)
 			{
