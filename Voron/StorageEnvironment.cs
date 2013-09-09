@@ -393,7 +393,7 @@ namespace Voron
 		{
 			return new EnvironmentStats
 				{
-					FreePages = FreeSpaceHandling.Info.GetFreePages(null).Count,
+					FreePages = FreeSpaceHandling.Info.FreePagesCount,
 					FreePagesOverhead = FreeSpaceHandling.Info.GetBuffersPages().Count,
 					RootPages = Root.State.PageCount,
 					HeaderPages = 2,
