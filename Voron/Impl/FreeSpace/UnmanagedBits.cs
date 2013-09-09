@@ -48,6 +48,8 @@ namespace Voron.Impl.FreeSpace
 			SetBufferPointer(ptr);
 
 			NativeMethods.memset(rawPtr, 0, (int)this.sizeInBytes); // clean all bits
+
+			TotalNumberOfFreePages = 0;
 		}
 
 		public long NumberOfTrackedPages { get; private set; }
@@ -65,6 +67,8 @@ namespace Voron.Impl.FreeSpace
 			get { return sizeof(int) * DivideAndRoundUp(AllModificationBits, 32); }
 		}
 
+		internal long TotalNumberOfFreePages { get; set; }
+
 		public bool IsDirty
 		{
 			get { return *(rawPtr) != 0; }
@@ -74,7 +78,7 @@ namespace Voron.Impl.FreeSpace
 		public void MarkPage(long page, bool val)
 		{
 			SetBit(freePagesPtr, page, val);
-			SetBit(modificationBitsPtr, page / (pageSize * 8), true); // mark dirty
+			SetBit(modificationBitsPtr, page/(pageSize*8), true); // mark dirty
 		}
 
 		public void ResetModifiedPages()
@@ -149,6 +153,8 @@ namespace Voron.Impl.FreeSpace
 				NativeMethods.memcpy((byte*)other.modificationBitsPtr, (byte*)modificationBitsPtr,
 									  (int)BytesTakenByModificationBits);
 			}
+
+			other.RefreshNumberOfFreePages();
 		}
 
 		public long CopyDirtyPagesTo(UnmanagedBits other)
@@ -169,6 +175,9 @@ namespace Voron.Impl.FreeSpace
 
 				copied += toCopy;
 			}
+
+			if(copied > 0)
+				other.RefreshNumberOfFreePages();
 
 			return copied;
 		}
@@ -204,6 +213,19 @@ namespace Voron.Impl.FreeSpace
 			var numberOfIntValuesReservedForFreeBits = MaxNumberOfPages / 32;
 
 			modificationBitsPtr = freePagesPtr + numberOfIntValuesReservedForFreeBits;
+		}
+
+		public void RefreshNumberOfFreePages()
+		{
+			TotalNumberOfFreePages = 0L;
+
+			for (int i = 0; i < NumberOfTrackedPages; i++)
+			{
+				if (IsFree(i))
+				{
+					TotalNumberOfFreePages++;
+				}
+			}
 		}
 	}
 }

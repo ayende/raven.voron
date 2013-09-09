@@ -114,9 +114,12 @@ namespace Voron.Impl.FreeSpace
 			bits[0] = new UnmanagedBits((byte*) acquirePagePointer(header->FirstBufferPageNumber).ToPointer(),
 			                            header->FirstBufferPageNumber, header->NumberOfPagesTakenForTracking*header->PageSize,
 			                            header->NumberOfTrackedPages, header->PageSize);
+			bits[0].RefreshNumberOfFreePages();
+
 			bits[1] = new UnmanagedBits((byte*) acquirePagePointer(header->SecondBufferPageNumber).ToPointer(),
 			                            header->SecondBufferPageNumber, header->NumberOfPagesTakenForTracking*header->PageSize,
 			                            header->NumberOfTrackedPages, header->PageSize);
+			bits[1].RefreshNumberOfFreePages();
 
 			state = new FreeSpaceHeader
 				{
@@ -191,6 +194,8 @@ namespace Voron.Impl.FreeSpace
 				{
 					_current.MarkPage(i, false);// mark returned pages as busy
 				}
+
+				_current.TotalNumberOfFreePages -= numberOfFreePages;
 			}
 
 			return result;
@@ -203,15 +208,21 @@ namespace Voron.Impl.FreeSpace
 			if (initialized == false)
 				return -1;
 
+			if (numberOfPagesToGet > _current.TotalNumberOfFreePages)
+				return -1;
+
 			var searched = 0;
 
 			long rangeStart = -1;
 			long rangeSize = 0;
+
+			var end = _current.NumberOfTrackedPages - 1;
+
 			while (searched < _current.NumberOfTrackedPages)
 			{
 				searched++;
 
-				if (_lastSearchPosition >= _current.NumberOfTrackedPages - 1)
+				if (_lastSearchPosition == end)
 				{
 					_lastSearchPosition = -1;
 					rangeStart = -1;
@@ -222,7 +233,7 @@ namespace Voron.Impl.FreeSpace
 
 				if (_current.IsFree(_lastSearchPosition))
 				{
-					if (rangeSize == 0) // nothing found
+					if (rangeSize == 0L) // nothing found
 					{
 						rangeStart = _lastSearchPosition;
 					}
@@ -307,6 +318,8 @@ namespace Voron.Impl.FreeSpace
 			{
 				_current.MarkPage(freedPage, true);
 			}
+
+			_current.TotalNumberOfFreePages += registeredFreedPages.Count;
 
 			registeredFreedPages.Clear();
 		}
