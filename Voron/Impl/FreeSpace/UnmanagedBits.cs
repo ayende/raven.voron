@@ -156,7 +156,7 @@ namespace Voron.Impl.FreeSpace
 									  (int)BytesTakenByModificationBits);
 			}
 
-			other.RefreshNumberOfFreePages();
+			other.NumberOfTrackedPages = NumberOfTrackedPages;
 		}
 
 		public long CopyDirtyPagesTo(UnmanagedBits other)
