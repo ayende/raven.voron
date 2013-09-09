@@ -91,9 +91,10 @@ namespace Voron.Impl.FreeSpace
 
 		private void SetBit(int* ptr, long pos, bool value)
 		{
+#if DEBUG
 			if (pos < 0 || pos >= capacity)
 				throw new ArgumentOutOfRangeException("pos");
-
+#endif
 			if (value)
 				ptr[pos >> 5] |= (1 << (int)(pos & 31)); // '>> 5' is '/ 32', '& 31' is '% 32'
 			else
@@ -102,9 +103,10 @@ namespace Voron.Impl.FreeSpace
 
 		private bool GetBit(int* ptr, long size, long pos)
 		{
+#if DEBUG
 			if (pos < 0 || pos >= size)
 				throw new ArgumentOutOfRangeException("pos");
-
+#endif
 			return (ptr[pos >> 5] & (1 << (int)(pos & 31))) != 0;
 		}
 
