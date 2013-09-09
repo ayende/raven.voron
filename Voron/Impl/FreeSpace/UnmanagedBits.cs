@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Diagnostics;
+using System.Runtime.CompilerServices;
 
 namespace Voron.Impl.FreeSpace
 {
@@ -89,6 +90,7 @@ namespace Voron.Impl.FreeSpace
 			}
 		}
 
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		private void SetBit(int* ptr, long pos, bool value)
 		{
 #if DEBUG
@@ -101,6 +103,7 @@ namespace Voron.Impl.FreeSpace
 				ptr[pos >> 5] &= ~(1 << (int)(pos & 31));
 		}
 
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		private bool GetBit(int* ptr, long size, long pos)
 		{
 #if DEBUG
@@ -184,6 +187,7 @@ namespace Voron.Impl.FreeSpace
 			return copied;
 		}
 
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public bool IsFree(long pos)
 		{
 			return GetBit(freePagesPtr, NumberOfTrackedPages, pos);
