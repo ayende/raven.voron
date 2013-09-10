@@ -198,7 +198,7 @@ namespace Voron.Impl
 				tree.State.CopyTo(treePtr);
 			}
 
-			freeSpaceHandling.RegisterFreePages(_freedPages);   // this is the the free space that is available when all concurrent transactions are done
+			freeSpaceHandling.RegisterFreePages(this, _freedPages);   // this is the the free space that is available when all concurrent transactions are done
 
 			if (_rootTreeData != null)
 			{
@@ -208,13 +208,14 @@ namespace Voron.Impl
 
 			_env.NextPageNumber = NextPageNumber;
 
+			List<long> freeSpacePagesToFlush;
+			freeSpaceHandling.OnCommit(this, _env.OldestTransaction, out freeSpacePagesToFlush);
+
 			// add pages modified in free space handling to dirty list in order to flush them
-			foreach (var bufferDirtyPage in freeSpaceHandling.GetDirtyPages(this))
+			foreach (var bufferDirtyPage in freeSpacePagesToFlush)
 			{
 				_dirtyPages.Add(bufferDirtyPage, bufferDirtyPage);
 			}
-
-			freeSpaceHandling.OnCommit(this);
 
 			// Because we don't know in what order the OS will flush the pages 
 			// we need to do this twice, once for the data, and then once for the metadata

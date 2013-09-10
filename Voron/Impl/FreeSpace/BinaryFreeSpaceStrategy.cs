@@ -64,9 +64,15 @@ namespace Voron.Impl.FreeSpace
 			}
 		}
 
+		public class FreedTransaction
+		{
+			public long Id;
+			public List<long> Pages;
+		}
+
 		private readonly Func<long, IntPtr> acquirePagePointer;
 		private readonly UnmanagedBits[] bits = new UnmanagedBits[2];
-		private readonly List<long> registeredFreedPages = new List<long>();
+		private readonly LinkedList<FreedTransaction> registeredFreedPages = new LinkedList<FreedTransaction>();
 
 		private FreeSpaceHeader state;
 		private long _lastSearchPosition = -1;
@@ -295,34 +301,35 @@ namespace Voron.Impl.FreeSpace
 			};
 		}
 
-		public void RegisterFreePages(List<long> freedPages)
+		public void RegisterFreePages(Transaction tx, List<long> freedPages)
 		{
-			registeredFreedPages.AddRange(freedPages);
+			registeredFreedPages.AddLast(new FreedTransaction()
+				{
+					Id = tx.Id,
+					Pages = freedPages
+				});
 		}
 
-		public void OnCommit(Transaction tx)
+		public void OnCommit(Transaction tx, long oldestTx, out List<long> dirtyPages)
 		{
 			var buffer = bits[tx.Id & 1];
-			ReleasePages(buffer);
 
-			buffer.Processed();
-		}
-
-		private void ReleasePages(UnmanagedBits buffer)
-		{
-			foreach (var freedPage in registeredFreedPages)
+			while (registeredFreedPages.First != null && registeredFreedPages.First.Value.Id <= oldestTx)
 			{
-				buffer.MarkPage(freedPage, true);
+				var val = registeredFreedPages.First.Value;
+				registeredFreedPages.RemoveFirst();
+
+				foreach (var freedPage in val.Pages)
+				{
+					buffer.MarkPage(freedPage, true);
+				}
+
+				buffer.TotalNumberOfFreePages += val.Pages.Count;
 			}
 
-			buffer.TotalNumberOfFreePages += registeredFreedPages.Count;
+			dirtyPages = buffer.DirtyPages;
 
-			registeredFreedPages.Clear();
-		}
-
-		public List<long> GetDirtyPages(Transaction tx)
-		{
-			return bits[tx.Id & 1].DirtyPages;
+			buffer.Processed();
 		}
 
 		public unsafe void CopyStateTo(FreeSpaceHeader* freeSpaceHeader)
