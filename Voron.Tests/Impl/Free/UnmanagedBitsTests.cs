@@ -124,7 +124,7 @@ namespace Voron.Tests.Impl.Free
 
 				bits1.MarkPage(10, true);
 
-				var bytesCopied = bits1.CopyDirtyPagesTo(bits2);
+				var bytesCopied = bits1.CopyDirtyBitsTo(bits2);
 
 				Assert.Equal(3, bytesCopied);
 			}
@@ -148,7 +148,7 @@ namespace Voron.Tests.Impl.Free
 					bits1.MarkPage(10, true);
 					bits1.MarkPage(40000, true);
 
-					var bytesCopied = bits1.CopyDirtyPagesTo(bits2);
+					var bytesCopied = bits1.CopyDirtyBitsTo(bits2);
 
 					Assert.Equal(4096 + 3404, bytesCopied);
 				}

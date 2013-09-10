@@ -173,13 +173,12 @@ namespace Voron.Impl.FreeSpace
 
 				reference.CopyAllTo(next);
 			}
-			else // copy dirty pages from reference
+			else // copy dirty bits from reference
 			{
-				reference.CopyDirtyPagesTo(next);
+				reference.CopyDirtyBitsTo(next);
 			}
 			
-			next.ResetModifiedPages();
-			next.IsDirty = true;
+			next.InitializeProcessing();
 
 			_current = next;
 		}
@@ -309,7 +308,7 @@ namespace Voron.Impl.FreeSpace
 		{
 			ReleasePages();
 
-			_current.IsDirty = false;
+			_current.Processed();
 		}
 
 		private void ReleasePages()
@@ -324,16 +323,9 @@ namespace Voron.Impl.FreeSpace
 			registeredFreedPages.Clear();
 		}
 
-		public List<long> GetBufferPages()
+		public List<long> GetDirtyPages()
 		{
-			var range = new List<long>();
-
-			for (var i = _current.StartPageNumber; i < _current.StartPageNumber + state.NumberOfPagesTakenForTracking; i++)
-			{
-				range.Add(i);
-			}
-
-			return range;
+			return _current.DirtyPages;
 		}
 
 		public unsafe void CopyStateTo(FreeSpaceHeader* freeSpaceHeader)
