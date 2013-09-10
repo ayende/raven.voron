@@ -79,7 +79,7 @@ namespace Voron
 
 				using (var tx = new Transaction(_pager, this, _transactionsCounter + 1, TransactionFlags.ReadWrite, FreeSpaceHandling))
 				{
-					FreeSpaceHandling.SetBufferForTransaction(tx.Id);
+					FreeSpaceHandling.SetBufferForTransaction(tx);
 					var root = Tree.Create(tx, _sliceComparer);
 
 					// important to first create the tree, then set it on the env
@@ -107,7 +107,7 @@ namespace Voron
 				var freeSpaceHeader = &entry->FreeSpace;
 				FreeSpaceHandling.Initialize(freeSpaceHeader);
 
-				FreeSpaceHandling.SetBufferForTransaction(tx.Id);
+				FreeSpaceHandling.SetBufferForTransaction(tx);
 
 				tx.Commit();
 			}
@@ -277,7 +277,7 @@ namespace Voron
 
 				if (flags == TransactionFlags.ReadWrite)
 				{
-					FreeSpaceHandling.SetBufferForTransaction(tx.Id);
+					FreeSpaceHandling.SetBufferForTransaction(tx);
 					tx.AfterCommit = TransactionAfterCommit;
 				}
 

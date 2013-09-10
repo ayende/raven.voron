@@ -209,12 +209,12 @@ namespace Voron.Impl
 			_env.NextPageNumber = NextPageNumber;
 
 			// add pages modified in free space handling to dirty list in order to flush them
-			foreach (var bufferDirtyPage in freeSpaceHandling.GetDirtyPages())
+			foreach (var bufferDirtyPage in freeSpaceHandling.GetDirtyPages(this))
 			{
 				_dirtyPages.Add(bufferDirtyPage, bufferDirtyPage);
 			}
 
-			freeSpaceHandling.OnCommit();
+			freeSpaceHandling.OnCommit(this);
 
 			// Because we don't know in what order the OS will flush the pages 
 			// we need to do this twice, once for the data, and then once for the metadata

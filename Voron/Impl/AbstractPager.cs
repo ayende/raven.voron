@@ -116,8 +116,8 @@ namespace Voron.Impl
 			// we always allocate twice as much as we actually need, because we don't 
 
 			// we request twice because it would likely be easier to find two smaller pieces than one big piece
-			var firstBufferPageStart = tx.Environment.FreeSpaceHandling.Find(requiredPages);
-			var secondBufferPageStart = tx.Environment.FreeSpaceHandling.Find(requiredPages);
+			var firstBufferPageStart = tx.Environment.FreeSpaceHandling.Find(tx, requiredPages);
+			var secondBufferPageStart = tx.Environment.FreeSpaceHandling.Find(tx, requiredPages);
 
 			// this is a bit of a hack, because we modify the NextPageNumber just before
 			// the tx is going to modify it, too.
