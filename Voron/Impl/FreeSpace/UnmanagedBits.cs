@@ -131,12 +131,20 @@ namespace Voron.Impl.FreeSpace
 			SetBit(modificationBitsPtr, page/(pageSize*8), true); // mark dirty
 		}
 
+		public void MarkPages(long startPage, long count, bool val)
+		{
+			SetBits(freePagesPtr, startPage, count, val);
+
+			var fistModificationBitToSet = startPage/(pageSize*8);
+			var lastModificationBitToSet = (startPage + count - 1)/(pageSize*8);
+			var numberOfModificationBitsToSet = lastModificationBitToSet - lastModificationBitToSet + 1;
+
+			SetBits(modificationBitsPtr, fistModificationBitToSet, numberOfModificationBitsToSet, true); // mark dirty
+		}
+
 		private void ResetModifiedPages()
 		{
-			for (int i = 0; i < AllModificationBits; i++)
-			{
-				SetBit(modificationBitsPtr, i, false); // mark clean
-			}
+			SetBits(modificationBitsPtr, 0, AllModificationBits, false);
 		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -150,6 +158,25 @@ namespace Voron.Impl.FreeSpace
 				ptr[pos >> 5] |= (1 << (int)(pos & 31)); // '>> 5' is '/ 32', '& 31' is '% 32'
 			else
 				ptr[pos >> 5] &= ~(1 << (int)(pos & 31));
+		}
+
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		private void SetBits(int* ptr, long startPosition, long numberOfBitsToSet, bool value)
+		{
+#if DEBUG
+			if (startPosition < 0)
+				throw new ArgumentOutOfRangeException("startPosition");
+			if (startPosition + numberOfBitsToSet >= capacity)
+				throw new ArgumentOutOfRangeException("numberOfBitsToSet");
+#endif
+			var end = startPosition + numberOfBitsToSet;
+			for (var pos = startPosition; pos < end; pos++)
+			{
+				if (value)
+					ptr[pos >> 5] |= (1 << (int)(pos & 31)); // '>> 5' is '/ 32', '& 31' is '% 32'
+				else
+					ptr[pos >> 5] &= ~(1 << (int)(pos & 31));
+			}
 		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]

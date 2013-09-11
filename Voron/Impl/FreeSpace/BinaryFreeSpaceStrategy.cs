@@ -278,17 +278,12 @@ namespace Voron.Impl.FreeSpace
 			// mark pages that was taken by old buffers as free
 			var oldHeader = state;
 
-			for (var i = oldHeader.FirstBufferPageNumber; i < oldHeader.FirstBufferPageNumber + oldHeader.NumberOfPagesTakenForTracking; i++)
-			{
-				bits[0].MarkPage(i, true);
-				bits[1].MarkPage(i, true);
-			}
+			bits[0].MarkPages(oldHeader.FirstBufferPageNumber, oldHeader.NumberOfPagesTakenForTracking, true);
+			bits[1].MarkPages(oldHeader.FirstBufferPageNumber, oldHeader.NumberOfPagesTakenForTracking, true);
 
-			for (var i = oldHeader.SecondBufferPageNumber; i < oldHeader.SecondBufferPageNumber + oldHeader.NumberOfPagesTakenForTracking; i++)
-			{
-				bits[0].MarkPage(i, true);
-				bits[1].MarkPage(i, true);
-			}
+			bits[0].MarkPages(oldHeader.SecondBufferPageNumber, oldHeader.NumberOfPagesTakenForTracking, true);
+			bits[1].MarkPages(oldHeader.SecondBufferPageNumber, oldHeader.NumberOfPagesTakenForTracking, true);
+
 
 			// update header
 			state = new FreeSpaceHeader
