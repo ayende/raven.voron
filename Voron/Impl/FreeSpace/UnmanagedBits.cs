@@ -137,7 +137,7 @@ namespace Voron.Impl.FreeSpace
 
 			var fistModificationBitToSet = startPage/(pageSize*8);
 			var lastModificationBitToSet = (startPage + count - 1)/(pageSize*8);
-			var numberOfModificationBitsToSet = lastModificationBitToSet - lastModificationBitToSet + 1;
+			var numberOfModificationBitsToSet = lastModificationBitToSet - fistModificationBitToSet + 1;
 
 			SetBits(modificationBitsPtr, fistModificationBitToSet, numberOfModificationBitsToSet, true); // mark dirty
 		}
@@ -318,6 +318,18 @@ namespace Voron.Impl.FreeSpace
 					TotalNumberOfFreePages++;
 				}
 			}
+		}
+
+		internal bool[] GetModificationBits()
+		{
+			var modificationBits = new bool[ModificationBitsInUse];
+
+			for (int i = 0; i < ModificationBitsInUse; i++)
+			{
+				modificationBits[i] = GetBit(modificationBitsPtr, ModificationBitsInUse, i);
+			}
+
+			return modificationBits;
 		}
 	}
 }

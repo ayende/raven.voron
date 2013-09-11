@@ -5,6 +5,7 @@
 // -----------------------------------------------------------------------
 
 using System;
+using System.Linq;
 using Voron.Impl.FreeSpace;
 using Xunit;
 
@@ -220,6 +221,53 @@ namespace Voron.Tests.Impl.Free
 				{
 					Assert.Equal(ptr1[i], ptr2[i]);
 				}
+			}
+		}
+
+		[Fact]
+		public void CanSetRangeOfBits()
+		{
+			var bytes = new byte[2 *4096];
+
+			fixed (byte* ptr = bytes)
+			{
+				var bits = new UnmanagedBits(ptr, 0, bytes.Length, 60000, 4096);
+
+				var freePages = Enumerable.Range(30000, 20000).ToArray();
+
+				bits.MarkPages(30000, 20000, true);
+
+				for (var page = 0; page < 60000; page++)
+				{
+					if (freePages.Contains(page))
+					{
+						Assert.True(bits.IsFree(page));
+					}
+					else
+					{
+						Assert.False(bits.IsFree(page));
+					}
+				}
+			}
+		}
+
+		[Fact]
+		public void MarkingRangeOfBitsShouldSetAppropriateModificationBits()
+		{
+			var bytes = new byte[2 * 4096];
+
+			fixed (byte* ptr = bytes)
+			{
+				var bits = new UnmanagedBits(ptr, 0, bytes.Length, 60000, 4096);
+
+				const long lastBitInFirstBufferPage = 32768 - 1;
+
+				bits.MarkPages(lastBitInFirstBufferPage, 2, true); // should mark modification bits as true on positionss 0 and 1
+
+				var modificationBits = bits.GetModificationBits();
+
+				Assert.True(modificationBits[0]);
+				Assert.True(modificationBits[1]);
 			}
 		}
 	}
