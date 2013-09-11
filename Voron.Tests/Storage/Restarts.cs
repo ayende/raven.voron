@@ -72,5 +72,31 @@ namespace Voron.Tests.Storage
                 }
             }
         }
+
+		[Fact]
+		public void FreeSpaceBuffersAreRecoveredAfterRestartIfNecessary()
+		{
+			//TODO arek
+			using (var pureMemoryPager = new PureMemoryPager())
+			{
+				using (var env = new StorageEnvironment(pureMemoryPager, ownsPager: false))
+				{
+					using (var tx = env.NewTransaction(TransactionFlags.ReadWrite))
+					{
+						env.Root.Add(tx, "test/1", new MemoryStream());
+						// tx.Commit(); - intentionally do not commit, this will mark buffer as dirty
+					}
+				}
+
+				using (var env = new StorageEnvironment(pureMemoryPager))
+				{
+					using (var tx = env.NewTransaction(TransactionFlags.ReadWrite))
+					{
+						env.Root.Add(tx, "test/1", new MemoryStream());
+						tx.Commit();
+					}
+				}
+			}
+		}
     }
 }

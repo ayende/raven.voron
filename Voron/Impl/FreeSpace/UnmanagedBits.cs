@@ -244,13 +244,13 @@ namespace Voron.Impl.FreeSpace
 			}
 		}
 
-		public long CopyDirtyBitsTo(UnmanagedBits other)
+		public long CopyDirtyBitsTo(UnmanagedBits other, bool[] forcedModificationBitsToCopy = null)
 		{
 			var copied = 0;
 
 			for (var i = 0; i < ModificationBitsInUse; i++)
 			{
-				if (GetBit(modificationBitsPtr, ModificationBitsInUse, i) == false)
+				if (GetBit(modificationBitsPtr, ModificationBitsInUse, i) == false && (forcedModificationBitsToCopy == null || forcedModificationBitsToCopy[i] == false))
 					continue;
 
 				var toCopy = pageSize;

@@ -157,6 +157,21 @@ namespace Voron.Impl.FreeSpace
 			return newPage;
 		}
 
+		public void RecoverBuffers()
+		{
+			if(bits.All(x => x.IsDirty == false))
+				return;
+
+			if(bits.All(x => x.IsDirty))
+				throw new InvalidDataException(
+						"Both buffers are dirty. Valid state of the free pages buffer cannot be restored during buffers recovery"); // should never happen
+
+			var dirtyBuffer = bits.First(x => x.IsDirty);
+			var cleanBuffer = bits.First(x => x.IsDirty == false);
+
+			cleanBuffer.CopyAllTo(dirtyBuffer);
+		}
+
 		public void SetBufferForTransaction(Transaction tx)
 		{
 			var indexOfBuffer = tx.Id & 1;
@@ -171,7 +186,12 @@ namespace Voron.Impl.FreeSpace
 						"Both buffers are dirty. Valid state of the free pages buffer cannot be restored. Transaction number: " +
 						tx.Id); // should never happen
 
-				reference.CopyAllTo(next);
+				// last transaction was aborted and its buffer is dirty
+				// we have to copy pages according to modification bits from dirty buffer
+
+				Debug.Assert(next.ModificationBitsInUse == reference.ModificationBitsInUse);
+
+				reference.CopyDirtyBitsTo(next, next.GetModificationBits());
 			}
 			else // copy dirty bits from reference
 			{

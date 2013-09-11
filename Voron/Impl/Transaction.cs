@@ -22,7 +22,7 @@ namespace Voron.Impl
 		private readonly Dictionary<long, long> _dirtyPages = new Dictionary<long, long>();
 		private readonly List<long> _freedPages = new List<long>();
 		private readonly HashSet<PagerState> _pagerStates = new HashSet<PagerState>();
-		private readonly BinaryFreeSpaceStrategy freeSpaceHandling;
+		private readonly BinaryFreeSpaceStrategy _freeSpaceHandling;
 
 		public TransactionFlags Flags { get; private set; }
 
@@ -66,7 +66,7 @@ namespace Voron.Impl
 			_pager = pager;
 			_env = env;
 			_id = id;
-			this.freeSpaceHandling = freeSpaceHandling;
+			_freeSpaceHandling = freeSpaceHandling;
 			Flags = flags;
 			NextPageNumber = env.NextPageNumber;
 		}
@@ -141,7 +141,7 @@ namespace Voron.Impl
 
 		public Page AllocatePage(int numberOfPages)
 		{
-			Page page = freeSpaceHandling.TryAllocateFromFreeSpace(this, numberOfPages);
+			Page page = _freeSpaceHandling.TryAllocateFromFreeSpace(this, numberOfPages);
 			if (page == null) // allocate from end of file
 			{
 				if (numberOfPages > 1)
@@ -198,7 +198,7 @@ namespace Voron.Impl
 				tree.State.CopyTo(treePtr);
 			}
 
-			freeSpaceHandling.RegisterFreePages(this, _freedPages);   // this is the the free space that is available when all concurrent transactions are done
+			_freeSpaceHandling.RegisterFreePages(this, _freedPages);   // this is the the free space that is available when all concurrent transactions are done
 
 			if (_rootTreeData != null)
 			{
@@ -209,7 +209,7 @@ namespace Voron.Impl
 			_env.NextPageNumber = NextPageNumber;
 
 			List<long> freeSpacePagesToFlush;
-			freeSpaceHandling.OnCommit(this, _env.OldestTransaction, out freeSpacePagesToFlush);
+			_freeSpaceHandling.OnCommit(this, _env.OldestTransaction, out freeSpacePagesToFlush);
 
 			// add pages modified in free space handling to dirty list in order to flush them
 			foreach (var bufferDirtyPage in freeSpacePagesToFlush)
@@ -264,7 +264,7 @@ namespace Voron.Impl
 			var fileHeader = (FileHeader*)pg.Base;
 			fileHeader->TransactionId = _id;
 			fileHeader->LastPageNumber = NextPageNumber - 1;
-			freeSpaceHandling.CopyStateTo(&fileHeader->FreeSpace);
+			_freeSpaceHandling.CopyStateTo(&fileHeader->FreeSpace);
 			_env.Root.State.CopyTo(&fileHeader->Root);
 		}
 

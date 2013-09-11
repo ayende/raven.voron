@@ -106,6 +106,7 @@ namespace Voron
 
 				var freeSpaceHeader = &entry->FreeSpace;
 				FreeSpaceHandling.Initialize(freeSpaceHeader);
+				FreeSpaceHandling.RecoverBuffers();
 
 				FreeSpaceHandling.SetBufferForTransaction(tx);
 

@@ -143,7 +143,7 @@ namespace Voron.Tests.Impl.Free
 		}
 
 		[Fact]
-		public void WhenBufferIsDirtyShouldCopySecondBufferBeforeCanProcess()
+		public void WhenBufferIsDirtyShouldCopyDirtyPagesFromCleanBufferBeforeCanProcess()
 		{
 			using (var tx1 = Env.NewTransaction(TransactionFlags.ReadWrite))
 			{
