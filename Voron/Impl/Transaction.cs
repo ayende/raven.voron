@@ -238,7 +238,8 @@ namespace Voron.Impl
 			var sortedPagesToFlush = _dirtyPages.Select(x => x.Value).Distinct().ToList();
 
 			// add pages modified in free space handling to dirty list in order to flush them
-			sortedPagesToFlush.AddRange(dirtyFreeSpacePages);
+			if (dirtyFreeSpacePages != null)
+				sortedPagesToFlush.AddRange(dirtyFreeSpacePages);
 
 			sortedPagesToFlush.Sort();
 			_pager.Flush(sortedPagesToFlush);

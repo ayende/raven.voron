@@ -192,7 +192,7 @@ namespace Voron.Impl.FreeSpace
 			                                       numberOfPagesToTrack,
 			                                       pageSize);
 
-			bits[0].CopyAllTo(newFirstBuffer); // we cannot just copy because a new buffer is bigger
+			bits[0].CopyAllTo(newFirstBuffer);
 			bits[0] = newFirstBuffer;
 
 			var newSecondBuffer = new UnmanagedBits((byte*) acquirePagePointer(secondBufferPageStart),
@@ -239,7 +239,7 @@ namespace Voron.Impl.FreeSpace
 		{
 			if (tx.FreeSpaceBuffer == null)
 			{
-				dirtyPages = new List<long>();
+				dirtyPages = null;
 				return;
 			}
 
