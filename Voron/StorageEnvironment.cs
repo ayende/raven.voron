@@ -4,7 +4,6 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading;
-using System.Threading.Tasks;
 using Voron.Debugging;
 using Voron.Impl;
 using Voron.Impl.FileHeaders;

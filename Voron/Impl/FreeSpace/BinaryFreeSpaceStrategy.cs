@@ -22,12 +22,12 @@ namespace Voron.Impl.FreeSpace
 		    {
 		        get
 		        {
-					if (_strategy.bits.All(x => x.IsDirty == false) && _strategy._lastCommittedWriteTransactionBuffer != null)
+					if (_strategy._bits.All(x => x.IsDirty == false) && _strategy._lastCommittedWriteTransactionBuffer != null)
 					{
 						return _strategy._lastCommittedWriteTransactionBuffer.TotalNumberOfFreePages;
 					}
 
-		            var bits = _strategy.bits.First(x => x.IsDirty == false);
+		            var bits = _strategy._bits.First(x => x.IsDirty == false);
 		            return bits.TotalNumberOfFreePages;
 		        }
 		    }
@@ -36,15 +36,15 @@ namespace Voron.Impl.FreeSpace
 			{
 				var range = new List<long>();
 
-				var buffer1 = _strategy.bits[0];
-				var buffer2 = _strategy.bits[1];
+				var buffer1 = _strategy._bits[0];
+				var buffer2 = _strategy._bits[1];
 
-				for (var i = buffer1.StartPageNumber; i < buffer1.StartPageNumber + _strategy.state.NumberOfPagesTakenForTracking; i++)
+				for (var i = buffer1.StartPageNumber; i < buffer1.StartPageNumber + _strategy._state.NumberOfPagesTakenForTracking; i++)
 				{
 					range.Add(i);
 				}
 
-				for (var i = buffer2.StartPageNumber; i < buffer2.StartPageNumber + _strategy.state.NumberOfPagesTakenForTracking; i++)
+				for (var i = buffer2.StartPageNumber; i < buffer2.StartPageNumber + _strategy._state.NumberOfPagesTakenForTracking; i++)
 				{
 					range.Add(i);
 				}
@@ -54,7 +54,7 @@ namespace Voron.Impl.FreeSpace
 
 			public List<long> GetFreePages(long transactionNumber)
 			{
-			    var buffer = _strategy.bits[transactionNumber & 1]; // take buffer specific for transaction
+			    var buffer = _strategy._bits[transactionNumber & 1]; // take buffer specific for transaction
 
 			    var result = new List<long>();
 
@@ -74,11 +74,11 @@ namespace Voron.Impl.FreeSpace
 			public List<long> Pages;
 		}
 
-		private readonly Func<long, IntPtr> acquirePagePointer;
-		private readonly UnmanagedBits[] bits = new UnmanagedBits[2];
-		private readonly LinkedList<FreedTransaction> registeredFreedPages = new LinkedList<FreedTransaction>();
+		private readonly Func<long, IntPtr> _acquirePagePointer;
+		private readonly UnmanagedBits[] _bits = new UnmanagedBits[2];
+		private readonly LinkedList<FreedTransaction> _registeredFreedPages = new LinkedList<FreedTransaction>();
 
-		private FreeSpaceHeader state;
+		private FreeSpaceHeader _state;
 		private FreeSpaceInfo _info;
 		private UnmanagedBits _lastCommittedWriteTransactionBuffer;
 
@@ -86,9 +86,9 @@ namespace Voron.Impl.FreeSpace
 		{
 			get
 			{
-				Debug.Assert((bits[0] == null && bits[1] == null) || (bits[0].MaxNumberOfPages == bits[1].MaxNumberOfPages));
+				Debug.Assert((_bits[0] == null && _bits[1] == null) || (_bits[0].MaxNumberOfPages == _bits[1].MaxNumberOfPages));
 
-				return bits[0] != null ? bits[0].MaxNumberOfPages : 0;
+				return _bits[0] != null ? _bits[0].MaxNumberOfPages : 0;
 			}
 		}
 
@@ -96,9 +96,9 @@ namespace Voron.Impl.FreeSpace
 		{
 			get
 			{
-				Debug.Assert((bits[0] == null && bits[1] == null) || (bits[0].NumberOfTrackedPages == bits[1].NumberOfTrackedPages));
+				Debug.Assert((_bits[0] == null && _bits[1] == null) || (_bits[0].NumberOfTrackedPages == _bits[1].NumberOfTrackedPages));
 
-				return bits[0] != null ? bits[0].NumberOfTrackedPages : 0;
+				return _bits[0] != null ? _bits[0].NumberOfTrackedPages : 0;
 			}
 		}
 
@@ -109,22 +109,22 @@ namespace Voron.Impl.FreeSpace
 
 		public BinaryFreeSpaceStrategy(Func<long, IntPtr> acquirePagePointer)
 		{
-			this.acquirePagePointer = acquirePagePointer;
+			_acquirePagePointer = acquirePagePointer;
 		}
 
 		public unsafe void Initialize(FreeSpaceHeader* header)
 		{
-			bits[0] = new UnmanagedBits((byte*) acquirePagePointer(header->FirstBufferPageNumber).ToPointer(),
+			_bits[0] = new UnmanagedBits((byte*) _acquirePagePointer(header->FirstBufferPageNumber).ToPointer(),
 			                            header->FirstBufferPageNumber, header->NumberOfPagesTakenForTracking*header->PageSize,
 			                            header->NumberOfTrackedPages, header->PageSize);
-			bits[0].RefreshNumberOfFreePages();
+			_bits[0].RefreshNumberOfFreePages();
 
-			bits[1] = new UnmanagedBits((byte*) acquirePagePointer(header->SecondBufferPageNumber).ToPointer(),
+			_bits[1] = new UnmanagedBits((byte*) _acquirePagePointer(header->SecondBufferPageNumber).ToPointer(),
 			                            header->SecondBufferPageNumber, header->NumberOfPagesTakenForTracking*header->PageSize,
 			                            header->NumberOfTrackedPages, header->PageSize);
-			bits[1].RefreshNumberOfFreePages();
+			_bits[1].RefreshNumberOfFreePages();
 
-			state = new FreeSpaceHeader
+			_state = new FreeSpaceHeader
 				{
 					FirstBufferPageNumber = header->FirstBufferPageNumber,
 					SecondBufferPageNumber = header->SecondBufferPageNumber,
@@ -136,21 +136,21 @@ namespace Voron.Impl.FreeSpace
 
 		public unsafe void UpdateBufferPointers()
 		{
-			bits[0].SetBufferPointer((byte*)acquirePagePointer(state.FirstBufferPageNumber).ToPointer());
-			bits[1].SetBufferPointer((byte*)acquirePagePointer(state.SecondBufferPageNumber).ToPointer());
+			_bits[0].SetBufferPointer((byte*)_acquirePagePointer(_state.FirstBufferPageNumber).ToPointer());
+			_bits[1].SetBufferPointer((byte*)_acquirePagePointer(_state.SecondBufferPageNumber).ToPointer());
 		}
 
 		public void RecoverBuffers()
 		{
-			if(bits.All(x => x.IsDirty == false))
+			if(_bits.All(x => x.IsDirty == false))
 				return;
 
-			if(bits.All(x => x.IsDirty))
+			if(_bits.All(x => x.IsDirty))
 				throw new InvalidDataException(
 						"Both buffers are dirty. Valid state of the free pages buffer cannot be restored during buffers recovery"); // should never happen
 
-			var dirtyBuffer = bits.First(x => x.IsDirty);
-			var cleanBuffer = bits.First(x => x.IsDirty == false);
+			var dirtyBuffer = _bits.First(x => x.IsDirty);
+			var cleanBuffer = _bits.First(x => x.IsDirty == false);
 
 			cleanBuffer.CopyAllTo(dirtyBuffer);
 		}
@@ -159,8 +159,8 @@ namespace Voron.Impl.FreeSpace
 		{
 			var indexOfBuffer = txId & 1;
 
-			var next = bits[indexOfBuffer];
-			var reference = bits[1 - indexOfBuffer];
+			var next = _bits[indexOfBuffer];
+			var reference = _bits[1 - indexOfBuffer];
 
 			if (next.IsDirty)
 			{
@@ -188,37 +188,37 @@ namespace Voron.Impl.FreeSpace
 
 		public unsafe void MoveTo(long firstBufferPageStart, long secondBufferPageStart, long numberOfPagesToTrack, long numberOfPagesForTracking, int pageSize)
 		{
-			var newFirstBuffer = new UnmanagedBits((byte*) acquirePagePointer(firstBufferPageStart),
+			var newFirstBuffer = new UnmanagedBits((byte*) _acquirePagePointer(firstBufferPageStart),
 			                                       firstBufferPageStart,
 			                                       numberOfPagesForTracking*pageSize,
 			                                       numberOfPagesToTrack,
 			                                       pageSize);
 
-			bits[0].CopyAllTo(newFirstBuffer);
-			bits[0] = newFirstBuffer;
+			_bits[0].CopyAllTo(newFirstBuffer);
+			_bits[0] = newFirstBuffer;
 
-			var newSecondBuffer = new UnmanagedBits((byte*) acquirePagePointer(secondBufferPageStart),
+			var newSecondBuffer = new UnmanagedBits((byte*) _acquirePagePointer(secondBufferPageStart),
 			                                        secondBufferPageStart,
 			                                        numberOfPagesForTracking*pageSize,
 			                                        numberOfPagesToTrack,
 			                                        pageSize);
-			bits[1].CopyAllTo(newSecondBuffer);
-			bits[1] = newSecondBuffer;
+			_bits[1].CopyAllTo(newSecondBuffer);
+			_bits[1] = newSecondBuffer;
 
 			// mark pages that was taken by old buffers as free
-			var oldHeader = state;
+			var oldHeader = _state;
 
-			bits[0].MarkPages(oldHeader.FirstBufferPageNumber, oldHeader.NumberOfPagesTakenForTracking, true);
-			bits[1].MarkPages(oldHeader.FirstBufferPageNumber, oldHeader.NumberOfPagesTakenForTracking, true);
+			_bits[0].MarkPages(oldHeader.FirstBufferPageNumber, oldHeader.NumberOfPagesTakenForTracking, true);
+			_bits[1].MarkPages(oldHeader.FirstBufferPageNumber, oldHeader.NumberOfPagesTakenForTracking, true);
 
-			bits[0].MarkPages(oldHeader.SecondBufferPageNumber, oldHeader.NumberOfPagesTakenForTracking, true);
-			bits[1].MarkPages(oldHeader.SecondBufferPageNumber, oldHeader.NumberOfPagesTakenForTracking, true);
+			_bits[0].MarkPages(oldHeader.SecondBufferPageNumber, oldHeader.NumberOfPagesTakenForTracking, true);
+			_bits[1].MarkPages(oldHeader.SecondBufferPageNumber, oldHeader.NumberOfPagesTakenForTracking, true);
 
-			bits[0].Processed();
-			bits[1].Processed();
+			_bits[0].Processed();
+			_bits[1].Processed();
 
 			// update header
-			state = new FreeSpaceHeader
+			_state = new FreeSpaceHeader
 			{
 				FirstBufferPageNumber = firstBufferPageStart,
 				SecondBufferPageNumber = secondBufferPageStart,
@@ -230,7 +230,7 @@ namespace Voron.Impl.FreeSpace
 
 		public void RegisterFreePages(Transaction tx, List<long> freedPages)
 		{
-			registeredFreedPages.AddLast(new FreedTransaction()
+			_registeredFreedPages.AddLast(new FreedTransaction
 				{
 					Id = tx.Id,
 					Pages = freedPages
@@ -245,10 +245,10 @@ namespace Voron.Impl.FreeSpace
 				return;
 			}
 
-			while (registeredFreedPages.First != null && registeredFreedPages.First.Value.Id <= oldestTx)
+			while (_registeredFreedPages.First != null && _registeredFreedPages.First.Value.Id <= oldestTx)
 			{
-				var val = registeredFreedPages.First.Value;
-				registeredFreedPages.RemoveFirst();
+				var val = _registeredFreedPages.First.Value;
+				_registeredFreedPages.RemoveFirst();
 
 				foreach (var freedPage in val.Pages)
 				{
@@ -269,16 +269,16 @@ namespace Voron.Impl.FreeSpace
 
 		public unsafe void CopyStateTo(FreeSpaceHeader* freeSpaceHeader)
 		{
-			freeSpaceHeader->FirstBufferPageNumber = state.FirstBufferPageNumber;
-			freeSpaceHeader->SecondBufferPageNumber = state.SecondBufferPageNumber;
-			freeSpaceHeader->NumberOfTrackedPages = state.NumberOfTrackedPages;
-			freeSpaceHeader->NumberOfPagesTakenForTracking = state.NumberOfPagesTakenForTracking;
-			freeSpaceHeader->PageSize = state.PageSize;
+			freeSpaceHeader->FirstBufferPageNumber = _state.FirstBufferPageNumber;
+			freeSpaceHeader->SecondBufferPageNumber = _state.SecondBufferPageNumber;
+			freeSpaceHeader->NumberOfTrackedPages = _state.NumberOfTrackedPages;
+			freeSpaceHeader->NumberOfPagesTakenForTracking = _state.NumberOfPagesTakenForTracking;
+			freeSpaceHeader->PageSize = _state.PageSize;
 		}
 
 		public void TrackMorePages(long newNumberOfPagesToTrack)
 		{
-			foreach (var unmanagedBits in bits)
+			foreach (var unmanagedBits in _bits)
 			{
 				unmanagedBits.IncreaseSize(newNumberOfPagesToTrack);
 			}

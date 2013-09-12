@@ -20,36 +20,36 @@ namespace Voron.Impl.FreeSpace
 	{
 		private const int DirtyFlagSizeInBytes = sizeof(int);
 
-		private readonly long sizeInBytes;
-		private readonly long capacity;
-		private readonly int pageSize;
-		private readonly long allocatedPages;
+		private readonly long _sizeInBytes;
+		private readonly long _capacity;
+		private readonly int _pageSize;
+		private readonly long _allocatedPages;
 
-		private byte* rawPtr;
-		private int* freePagesPtr;
-		private int* modificationBitsPtr;
-		private int* dirtyFlagPtr;
+		private byte* _rawPtr;
+		private int* _freePagesPtr;
+		private int* _modificationBitsPtr;
+		private int* _dirtyFlagPtr;
 
-		private readonly List<long> internallyCopiedPages = new List<long>();
+		private readonly List<long> _internallyCopiedPages = new List<long>();
 
 		private long _lastSearchPosition = -1;
 
 		public UnmanagedBits(byte* ptr, long startPageNumber, long sizeInBytes, long numberOfPages, int pageSize)
 		{
-			this.sizeInBytes = sizeInBytes;
-			this.pageSize = pageSize;
-			this.allocatedPages = this.sizeInBytes/this.pageSize;
+			_sizeInBytes = sizeInBytes;
+			_pageSize = pageSize;
+			_allocatedPages = _sizeInBytes/_pageSize;
 
 			NumberOfTrackedPages = numberOfPages;
 			StartPageNumber = startPageNumber;
 
 			var sizeForBits = sizeInBytes - DirtyFlagSizeInBytes;
 
-			capacity = NumberOfBitsForSizeInBytes(sizeForBits);
+			_capacity = NumberOfBitsForSizeInBytes(sizeForBits);
 
 			AllModificationBits = DivideAndRoundUp(sizeForBits, pageSize);
-			MaxNumberOfPages = capacity - NumberOfBitsForSizeInBytes(BytesTakenByModificationBits);
-			ModificationBitsInUse = (long)Math.Ceiling((NumberOfTrackedPages / 8f) / this.pageSize);
+			MaxNumberOfPages = _capacity - NumberOfBitsForSizeInBytes(BytesTakenByModificationBits);
+			ModificationBitsInUse = (long)Math.Ceiling((NumberOfTrackedPages / 8f) / _pageSize);
 
 			Debug.Assert(AllModificationBits >= 1);
 			Debug.Assert(MaxNumberOfPages >= 1);
@@ -57,7 +57,7 @@ namespace Voron.Impl.FreeSpace
 
 			SetBufferPointer(ptr);
 
-			NativeMethods.memset(rawPtr, 0, (int)this.sizeInBytes); // clean all bits
+			NativeMethods.memset(_rawPtr, 0, (int)_sizeInBytes); // clean all bits
 
 			TotalNumberOfFreePages = 0;
 
@@ -83,20 +83,20 @@ namespace Voron.Impl.FreeSpace
 
 		public bool IsDirty
 		{
-			get { return *(dirtyFlagPtr) != 0; }
-			private set { *(dirtyFlagPtr) = value ? 1 : 0; }
+			get { return *(_dirtyFlagPtr) != 0; }
+			private set { *(_dirtyFlagPtr) = value ? 1 : 0; }
 		}
 
 		public List<long> DirtyPages
 		{
 			get
 			{
-				var result = new HashSet<long>(internallyCopiedPages);
+				var result = new HashSet<long>(_internallyCopiedPages);
 
 				// add pages where free bits were modified
 				for (var i = 0; i < ModificationBitsInUse; i++)
 				{
-					if (GetBit(modificationBitsPtr, ModificationBitsInUse, i) == false)
+					if (GetBit(_modificationBitsPtr, ModificationBitsInUse, i) == false)
 						continue;
 
 					result.Add(StartPageNumber + i);
@@ -104,9 +104,9 @@ namespace Voron.Impl.FreeSpace
 
 				// add last page where IsDirty flag is contained and all pages where modifications bits are contained
 				// most of the cases everything will be contained in a one page
-				var lastPageNumber = StartPageNumber + allocatedPages - 1;
+				var lastPageNumber = StartPageNumber + _allocatedPages - 1;
 
-				var numberOfPagesTakenByModificationBitsAndDirtyFlag = DivideAndRoundUp(BytesTakenByModificationBits + DirtyFlagSizeInBytes, pageSize);
+				var numberOfPagesTakenByModificationBitsAndDirtyFlag = DivideAndRoundUp(BytesTakenByModificationBits + DirtyFlagSizeInBytes, _pageSize);
 
 				for (var i = 0; i < numberOfPagesTakenByModificationBitsAndDirtyFlag; i++)
 				{
@@ -120,40 +120,40 @@ namespace Voron.Impl.FreeSpace
 		public void Processed()
 		{
 			IsDirty = false;
-			internallyCopiedPages.Clear();
+			_internallyCopiedPages.Clear();
 		}
 
 		public void MarkPage(long page, bool val)
 		{
 			IsDirty = true;
 
-			SetBit(freePagesPtr, page, val);
-			SetBit(modificationBitsPtr, page/(pageSize*8), true); // mark dirty
+			SetBit(_freePagesPtr, page, val);
+			SetBit(_modificationBitsPtr, page/(_pageSize*8), true); // mark dirty
 		}
 
 		public void MarkPages(long startPage, long count, bool val)
 		{
 			IsDirty = true;
 
-			SetBits(freePagesPtr, startPage, count, val);
+			SetBits(_freePagesPtr, startPage, count, val);
 
-			var fistModificationBitToSet = startPage/(pageSize*8);
-			var lastModificationBitToSet = (startPage + count - 1)/(pageSize*8);
+			var fistModificationBitToSet = startPage/(_pageSize*8);
+			var lastModificationBitToSet = (startPage + count - 1)/(_pageSize*8);
 			var numberOfModificationBitsToSet = lastModificationBitToSet - fistModificationBitToSet + 1;
 
-			SetBits(modificationBitsPtr, fistModificationBitToSet, numberOfModificationBitsToSet, true); // mark dirty
+			SetBits(_modificationBitsPtr, fistModificationBitToSet, numberOfModificationBitsToSet, true); // mark dirty
 		}
 
 		public void ResetModifiedPages()
 		{
-			SetBits(modificationBitsPtr, 0, AllModificationBits, false);
+			SetBits(_modificationBitsPtr, 0, AllModificationBits, false);
 		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		private void SetBit(int* ptr, long pos, bool value)
 		{
 #if DEBUG
-			if (pos < 0 || pos >= capacity)
+			if (pos < 0 || pos >= _capacity)
 				throw new ArgumentOutOfRangeException("pos");
 #endif
 			if (value)
@@ -168,7 +168,7 @@ namespace Voron.Impl.FreeSpace
 #if DEBUG
 			if (startPosition < 0)
 				throw new ArgumentOutOfRangeException("startPosition");
-			if (startPosition + numberOfBitsToSet >= capacity)
+			if (startPosition + numberOfBitsToSet >= _capacity)
 				throw new ArgumentOutOfRangeException("numberOfBitsToSet");
 #endif
 			var end = startPosition + numberOfBitsToSet;
@@ -212,37 +212,37 @@ namespace Voron.Impl.FreeSpace
 
 		public void CopyAllTo(UnmanagedBits other)
 		{
-			if (sizeInBytes == other.sizeInBytes)
+			if (_sizeInBytes == other._sizeInBytes)
 			{
 				Debug.Assert(NumberOfTrackedPages == other.NumberOfTrackedPages && AllModificationBits == other.AllModificationBits);
 
-				NativeMethods.memcpy(other.rawPtr, rawPtr, (int) sizeInBytes);
+				NativeMethods.memcpy(other._rawPtr, _rawPtr, (int) _sizeInBytes);
 			}
 			else
 			{
-				if (sizeInBytes > other.sizeInBytes)
+				if (_sizeInBytes > other._sizeInBytes)
 					throw new InvalidOperationException(
 						string.Format(
 							"Cannot copy unmanaged bits because the size of a buffer is not enough. The size of buffer that is being copied is {0} while the size of buffer where it should be copied is {1}",
-							sizeInBytes, other.sizeInBytes));
+							_sizeInBytes, other._sizeInBytes));
 
 				// here we need to split the data that we copy because the size of buffers is different what means
 				// that the pointers of the modification bits have different positions relative to the beginning of a buffer
 
 				// copy all free pages
-				NativeMethods.memcpy((byte*)other.freePagesPtr, (byte*)freePagesPtr, (int)GetSizeInBytesFor(NumberOfTrackedPages));
+				NativeMethods.memcpy((byte*)other._freePagesPtr, (byte*)_freePagesPtr, (int)GetSizeInBytesFor(NumberOfTrackedPages));
 
 				// copy all modification bits and dirty flag from the end
-				NativeMethods.memcpy((byte*)other.modificationBitsPtr, (byte*)modificationBitsPtr,
+				NativeMethods.memcpy((byte*)other._modificationBitsPtr, (byte*)_modificationBitsPtr,
 									  (int)(BytesTakenByModificationBits + DirtyFlagSizeInBytes));
 			}
 
 			other.NumberOfTrackedPages = NumberOfTrackedPages;
 
 			
-			for (int i = 0; i < other.allocatedPages; i++)
+			for (int i = 0; i < other._allocatedPages; i++)
 			{
-				other.internallyCopiedPages.Add(other.StartPageNumber + i);
+				other._internallyCopiedPages.Add(other.StartPageNumber + i);
 			}
 		}
 
@@ -252,17 +252,17 @@ namespace Voron.Impl.FreeSpace
 
 			for (var i = 0; i < ModificationBitsInUse; i++)
 			{
-				if (GetBit(modificationBitsPtr, ModificationBitsInUse, i) == false && (forcedModificationBitsToCopy == null || forcedModificationBitsToCopy[i] == false))
+				if (GetBit(_modificationBitsPtr, ModificationBitsInUse, i) == false && (forcedModificationBitsToCopy == null || forcedModificationBitsToCopy[i] == false))
 					continue;
 
-				var toCopy = pageSize;
+				var toCopy = _pageSize;
 
 				if (i == ModificationBitsInUse - 1) // last piece of free bits can take less bytes than pageSize
-					toCopy = (int)DivideAndRoundUp(NumberOfTrackedPages - (pageSize * i * 8), 8);
+					toCopy = (int)DivideAndRoundUp(NumberOfTrackedPages - (_pageSize * i * 8), 8);
 
-				NativeMethods.memcpy((byte*)other.freePagesPtr + (pageSize * i), (byte*)freePagesPtr + (pageSize * i), toCopy);
+				NativeMethods.memcpy((byte*)other._freePagesPtr + (_pageSize * i), (byte*)_freePagesPtr + (_pageSize * i), toCopy);
 
-				other.internallyCopiedPages.Add(other.StartPageNumber + i);
+				other._internallyCopiedPages.Add(other.StartPageNumber + i);
 
 				copied += toCopy;
 			}
@@ -278,7 +278,7 @@ namespace Voron.Impl.FreeSpace
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public bool IsFree(long pos)
 		{
-			return GetBit(freePagesPtr, NumberOfTrackedPages, pos);
+			return GetBit(_freePagesPtr, NumberOfTrackedPages, pos);
 		}
 
 		private static long DivideAndRoundUp(long numerator, long denominator)
@@ -296,19 +296,19 @@ namespace Voron.Impl.FreeSpace
 
 			NumberOfTrackedPages = newNumberOfPagesToTrack;
 
-			ModificationBitsInUse = (long)Math.Ceiling((NumberOfTrackedPages / 8f) / pageSize);
+			ModificationBitsInUse = (long)Math.Ceiling((NumberOfTrackedPages / 8f) / _pageSize);
 		}
 
 		public void SetBufferPointer(byte* ptr)
 		{
-			rawPtr = ptr;
-			freePagesPtr = (int*)rawPtr;
+			_rawPtr = ptr;
+			_freePagesPtr = (int*)_rawPtr;
 
 			var numberOfIntValuesReservedForFreeBits = MaxNumberOfPages / 32;
 
-			modificationBitsPtr = freePagesPtr + numberOfIntValuesReservedForFreeBits;
+			_modificationBitsPtr = _freePagesPtr + numberOfIntValuesReservedForFreeBits;
 
-			dirtyFlagPtr = (int*) (rawPtr + sizeInBytes - DirtyFlagSizeInBytes);
+			_dirtyFlagPtr = (int*) (_rawPtr + _sizeInBytes - DirtyFlagSizeInBytes);
 		}
 
 		public void RefreshNumberOfFreePages()
@@ -330,7 +330,7 @@ namespace Voron.Impl.FreeSpace
 
 			for (int i = 0; i < ModificationBitsInUse; i++)
 			{
-				modificationBits[i] = GetBit(modificationBitsPtr, ModificationBitsInUse, i);
+				modificationBits[i] = GetBit(_modificationBitsPtr, ModificationBitsInUse, i);
 			}
 
 			return modificationBits;
