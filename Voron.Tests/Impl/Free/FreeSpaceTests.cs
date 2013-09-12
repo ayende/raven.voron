@@ -4,6 +4,7 @@
 //  </copyright>
 // -----------------------------------------------------------------------
 
+using System.IO;
 using Voron.Impl.FreeSpace;
 using Xunit;
 
@@ -302,6 +303,40 @@ namespace Voron.Tests.Impl.Free
 				var page = tx2.FreeSpaceBuffer.Find(2);
 				Assert.Equal(4, page);
 			}
+		}
+
+		[Fact]
+		public void ShouldFreePagesOnlyWhenAreAreNoOlderConcurrentReadTransactions()
+		{
+			using (var tx1 = Env.NewTransaction(TransactionFlags.ReadWrite))
+			{
+				tx1.FreePage(3);
+
+				tx1.Commit();
+			}
+
+			Assert.Equal(1, Env.Stats().FreePages);
+
+			using (var tx2 = Env.NewTransaction(TransactionFlags.Read))
+			{
+				using (var tx3 = Env.NewTransaction(TransactionFlags.ReadWrite))
+				{
+					tx3.FreePage(4);
+
+					tx3.Commit();
+				}
+
+				Assert.Equal(1, Env.Stats().FreePages);
+
+				tx2.Commit();
+			}
+
+			using (var tx4 = Env.NewTransaction(TransactionFlags.ReadWrite))
+			{
+				tx4.Commit();
+			}
+
+			Assert.Equal(2, Env.Stats().FreePages);
 		}
 	}
 }

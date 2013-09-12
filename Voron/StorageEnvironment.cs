@@ -263,14 +263,17 @@ namespace Voron
 
 			try
 			{
+				UnmanagedBits freeSpaceBuffer = null;
 				long txId = _transactionsCounter;
 				if (flags == (TransactionFlags.ReadWrite))
 				{
 					txId = _transactionsCounter + 1;
 					_txWriter.Wait();
 					txLockTaken = true;
+
+					freeSpaceBuffer = FreeSpaceHandling.GetBufferForNewTransaction(txId);
 				}
-				var tx = new Transaction(_pager, this, txId, flags, FreeSpaceHandling.GetBufferForNewTransaction(txId));
+				var tx = new Transaction(_pager, this, txId, flags, freeSpaceBuffer);
 				_activeTransactions.TryAdd(txId, tx);
 				var state = _pager.TransactionBegan();
 				tx.AddPagerState(state);

@@ -4,7 +4,6 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using Voron.Impl.FileHeaders;
-using Voron.Trees;
 
 namespace Voron.Impl.FreeSpace
 {
@@ -23,6 +22,11 @@ namespace Voron.Impl.FreeSpace
 		    {
 		        get
 		        {
+					if (_strategy.bits.All(x => x.IsDirty == false) && _strategy._lastCommittedWriteTransactionBuffer != null)
+					{
+						return _strategy._lastCommittedWriteTransactionBuffer.TotalNumberOfFreePages;
+					}
+
 		            var bits = _strategy.bits.First(x => x.IsDirty == false);
 		            return bits.TotalNumberOfFreePages;
 		        }
@@ -77,6 +81,7 @@ namespace Voron.Impl.FreeSpace
 		private FreeSpaceHeader state;
 		private bool initialized;
 		private FreeSpaceInfo _info;
+		private UnmanagedBits _lastCommittedWriteTransactionBuffer;
 
 		public long MaxNumberOfPages
 		{
@@ -259,6 +264,10 @@ namespace Voron.Impl.FreeSpace
 			dirtyPages = tx.FreeSpaceBuffer.DirtyPages;
 
 			tx.FreeSpaceBuffer.Processed();
+
+			Debug.Assert(tx.Flags == TransactionFlags.ReadWrite);
+			
+			_lastCommittedWriteTransactionBuffer = tx.FreeSpaceBuffer;
 		}
 
 		public unsafe void CopyStateTo(FreeSpaceHeader* freeSpaceHeader)
