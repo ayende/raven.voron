@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
+using Voron.Impl.FileHeaders;
 using Voron.Impl.FreeSpace;
 using Voron.Trees;
 
@@ -143,12 +144,21 @@ namespace Voron.Impl
 			tx.Environment.FreeSpaceHandling.MoveTo(firstBufferPageStart, secondBufferPageStart, NumberOfAllocatedPages,
 			                                        requiredPages, PageSize);
 
-			// after moving buffers to new pages make sure that they are flushed
+			// after moving buffers to new pages make sure that they will be flushed
 			var buffersPages = tx.Environment.FreeSpaceHandling.Info.GetBuffersPages();
 			buffersPages.Sort();
 
 			Flush(buffersPages);
-			//TODO are flush free space handling header
+
+			// and both file headers will contain modified free space handling information
+			var fileHeader = (FileHeader*)Get(tx, 0).Base;
+			tx.Environment.FreeSpaceHandling.CopyStateTo(&fileHeader->FreeSpace);
+
+			fileHeader = (FileHeader*)Get(tx, 1).Base;
+			tx.Environment.FreeSpaceHandling.CopyStateTo(&fileHeader->FreeSpace);
+
+			Flush(new List<long> {0, 1});
+
 			Sync();
 		}
 
