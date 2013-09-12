@@ -4,7 +4,6 @@
 //  </copyright>
 // -----------------------------------------------------------------------
 
-using System.Collections.Generic;
 using Voron.Impl.FreeSpace;
 using Xunit;
 
@@ -28,13 +27,14 @@ namespace Voron.Tests.Impl.Free
 		{
 			using (var tx = Env.NewTransaction(TransactionFlags.ReadWrite))
 			{
-				Env.FreeSpaceHandling.RegisterFreePages(tx, new List<long> { 0, 1 });
-				List<long> _;
-				Env.FreeSpaceHandling.OnTransactionCommit(tx, Env.OldestTransaction, out _); // will mark registered pages as free in the buffer
+				tx.FreePage(4);
+				tx.FreePage(5);
+
+				tx.Commit();
 
 				var firstFreePage = tx.FreeSpaceBuffer.Find(2);
 
-				Assert.Equal(0, firstFreePage);
+				Assert.Equal(4, firstFreePage);
 			}
 		}
 
@@ -45,9 +45,10 @@ namespace Voron.Tests.Impl.Free
 			{
 				var numberOfTrackedPages = (long)Env.FreeSpaceHandling.NumberOfTrackedPages;
 
-				Env.FreeSpaceHandling.RegisterFreePages(tx, new List<long> { numberOfTrackedPages - 1, numberOfTrackedPages - 2 });
-				List<long> _;
-				Env.FreeSpaceHandling.OnTransactionCommit(tx, Env.OldestTransaction, out _);
+				tx.FreePage(numberOfTrackedPages - 1);
+				tx.FreePage(numberOfTrackedPages - 2);
+
+				tx.Commit();
 
 				var firstFreePage = tx.FreeSpaceBuffer.Find(2);
 
@@ -60,9 +61,10 @@ namespace Voron.Tests.Impl.Free
 		{
 			using (var tx = Env.NewTransaction(TransactionFlags.ReadWrite))
 			{
-				Env.FreeSpaceHandling.RegisterFreePages(tx, new List<long> { 5, 6 });
-				List<long> _;
-				Env.FreeSpaceHandling.OnTransactionCommit(tx, Env.OldestTransaction, out _);
+				tx.FreePage(5);
+				tx.FreePage(6);
+
+				tx.Commit();
 
 				var firstFreePage = tx.FreeSpaceBuffer.Find(2);
 
@@ -75,9 +77,11 @@ namespace Voron.Tests.Impl.Free
 		{
 			using (var tx = Env.NewTransaction(TransactionFlags.ReadWrite))
 			{
-				Env.FreeSpaceHandling.RegisterFreePages(tx, new List<long> { 4, 5, 6 });
-				List<long> _;
-				Env.FreeSpaceHandling.OnTransactionCommit(tx, Env.OldestTransaction, out _);
+				tx.FreePage(4);
+				tx.FreePage(5);
+				tx.FreePage(6);
+
+				tx.Commit();
 
 				var firstFreePage = tx.FreeSpaceBuffer.Find(2);
 
@@ -92,9 +96,16 @@ namespace Voron.Tests.Impl.Free
 		{
 			using (var tx = Env.NewTransaction(TransactionFlags.ReadWrite))
 			{
-				Env.FreeSpaceHandling.RegisterFreePages(tx, new List<long> { 1, 4, 5, 7, 8, 9 });
-				List<long> _;
-				Env.FreeSpaceHandling.OnTransactionCommit(tx, Env.OldestTransaction, out _);
+				tx.FreePage(2);
+
+				tx.FreePage(4);
+				tx.FreePage(5);
+				tx.FreePage(7);
+
+				tx.FreePage(8);
+				tx.FreePage(9);
+
+				tx.Commit();
 
 				var firstFreePage = tx.FreeSpaceBuffer.Find(2);
 				Assert.Equal(4, firstFreePage);
@@ -112,9 +123,10 @@ namespace Voron.Tests.Impl.Free
 		{
 			using (var tx = Env.NewTransaction(TransactionFlags.ReadWrite))
 			{
-				Env.FreeSpaceHandling.RegisterFreePages(tx, new List<long> { 2, 3 });
-				List<long> _;
-				Env.FreeSpaceHandling.OnTransactionCommit(tx, Env.OldestTransaction, out _);
+				tx.FreePage(2);
+				tx.FreePage(3);
+
+				tx.Commit();
 
 				// 2 pages are free but we request for 3
 				var firstFreePage = tx.FreeSpaceBuffer.Find(3);
@@ -127,12 +139,19 @@ namespace Voron.Tests.Impl.Free
 		{
 			using (var tx = Env.NewTransaction(TransactionFlags.ReadWrite))
 			{
-				Env.FreeSpaceHandling.RegisterFreePages(tx, new List<long> { 0, 6, 7, 8, 9 });
-				List<long> _;
-				Env.FreeSpaceHandling.OnTransactionCommit(tx, Env.OldestTransaction, out _);
+				var numberOfTrackedPages = (long)Env.FreeSpaceHandling.NumberOfTrackedPages;
+
+				tx.FreePage(2);
+
+				tx.FreePage(numberOfTrackedPages - 3);
+				tx.FreePage(numberOfTrackedPages - 2);
+				tx.FreePage(numberOfTrackedPages - 1);
+				tx.FreePage(numberOfTrackedPages);
+
+				tx.Commit();
 
 				var firstFreePage = tx.FreeSpaceBuffer.Find(2);
-				Assert.Equal(6, firstFreePage);
+				Assert.Equal(numberOfTrackedPages - 3, firstFreePage);
 
 				firstFreePage = tx.FreeSpaceBuffer.Find(3);
 				Assert.Equal(-1, firstFreePage);
@@ -144,24 +163,33 @@ namespace Voron.Tests.Impl.Free
 		{
 			using (var tx1 = Env.NewTransaction(TransactionFlags.ReadWrite))
 			{
-				Env.FreeSpaceHandling.RegisterFreePages(tx1, new List<long> { 1, 3 });
+				tx1.FreePage(2);
+				tx1.FreePage(4);
+
 				tx1.Commit();
 			}
 
 			using (var tx2 = Env.NewTransaction(TransactionFlags.ReadWrite))
 			{
-				Env.FreeSpaceHandling.RegisterFreePages(tx2, new List<long> { 4, 7, 9 });
-				// Env.FreeSpaceHandling.OnCommit(); - do not commit, so buffer will get marked as dirty
+				tx2.FreeSpaceBuffer.Find(1); // will mark buffer as dirty
+
+				tx2.FreePage(5);
+				tx2.FreePage(6);
+				tx2.FreePage(7);
+
+				// tx2.Commit(); - do not commit, so buffer will remain marked as dirty
+
+				Assert.True(tx2.FreeSpaceBuffer.IsDirty);
 
 				Env.FreeSpaceHandling.GetBufferForNewTransaction(tx2.Id); // should copy dirty pages from a buffer for tx1
 
 				// the same free pages as in buffer for tx1
-				Assert.True(tx2.FreeSpaceBuffer.IsFree(1));
-				Assert.True(tx2.FreeSpaceBuffer.IsFree(3));
+				Assert.True(tx2.FreeSpaceBuffer.IsFree(2));
+				Assert.True(tx2.FreeSpaceBuffer.IsFree(4));
 
-				Assert.False(tx2.FreeSpaceBuffer.IsFree(4));
+				Assert.False(tx2.FreeSpaceBuffer.IsFree(5));
+				Assert.False(tx2.FreeSpaceBuffer.IsFree(6));
 				Assert.False(tx2.FreeSpaceBuffer.IsFree(7));
-				Assert.False(tx2.FreeSpaceBuffer.IsFree(9));
 			}
 		}
 
@@ -170,16 +198,21 @@ namespace Voron.Tests.Impl.Free
 		{
 			using (var tx = Env.NewTransaction(TransactionFlags.ReadWrite))
 			{
-				Env.FreeSpaceHandling.RegisterFreePages(tx, new List<long> { 6, 7, 8, 9 });
-				List<long> _;
-				Env.FreeSpaceHandling.OnTransactionCommit(tx, Env.OldestTransaction, out _);
+				tx.FreePage(6);
+				tx.FreePage(7);
+				tx.FreePage(8);
+				tx.FreePage(9);
+
+				tx.Commit();
 
 				var firstFreePage = tx.FreeSpaceBuffer.Find(2);
 				Assert.Equal(6, firstFreePage);
 
 				// free pages from the beginning
-				Env.FreeSpaceHandling.RegisterFreePages(tx, new List<long> { 0, 1 });
-				Env.FreeSpaceHandling.OnTransactionCommit(tx, Env.OldestTransaction, out _);
+				tx.FreePage(2);
+				tx.FreePage(3);
+
+				tx.Commit();
 
 				// move search pointer at the end
 				firstFreePage = tx.FreeSpaceBuffer.Find(2);
@@ -187,7 +220,7 @@ namespace Voron.Tests.Impl.Free
 
 				// should take from the begin
 				firstFreePage = tx.FreeSpaceBuffer.Find(2);
-				Assert.Equal(0, firstFreePage);
+				Assert.Equal(2, firstFreePage);
 			}
 		}
 
@@ -196,7 +229,12 @@ namespace Voron.Tests.Impl.Free
 		{
 			using (var tx1 = Env.NewTransaction(TransactionFlags.ReadWrite))
 			{
-				Env.FreeSpaceHandling.RegisterFreePages(tx1, new List<long> { 6, 7, 8, 9 });
+				tx1.FreePage(6);
+				tx1.FreePage(7);
+				tx1.FreePage(8);
+				tx1.FreePage(9);
+
+				tx1.Commit();
 
 				tx1.Commit();
 			}
@@ -205,7 +243,8 @@ namespace Voron.Tests.Impl.Free
 			{
 				tx2.FreeSpaceBuffer.Find(2);
 
-				Env.FreeSpaceHandling.RegisterFreePages(tx2, new List<long> { 1, 2 });
+				tx2.FreePage(2);
+				tx2.FreePage(3);
 
 				tx2.Commit();
 			}
