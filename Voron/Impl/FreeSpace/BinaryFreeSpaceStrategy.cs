@@ -79,7 +79,6 @@ namespace Voron.Impl.FreeSpace
 		private readonly LinkedList<FreedTransaction> registeredFreedPages = new LinkedList<FreedTransaction>();
 
 		private FreeSpaceHeader state;
-		private bool initialized;
 		private FreeSpaceInfo _info;
 		private UnmanagedBits _lastCommittedWriteTransactionBuffer;
 
@@ -133,8 +132,6 @@ namespace Voron.Impl.FreeSpace
 					NumberOfTrackedPages = header->NumberOfTrackedPages,
 					PageSize = header->PageSize
 				};
-
-			initialized = true;
 		}
 
 		public unsafe void UpdateBufferPointers()
