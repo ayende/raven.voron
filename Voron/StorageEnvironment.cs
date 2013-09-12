@@ -54,6 +54,7 @@ namespace Voron
             catch (Exception)
             {
                 Dispose();
+	            throw;
             }
         }
 
@@ -77,9 +78,8 @@ namespace Voron
 
 				NextPageNumber = 4;
 
-				using (var tx = new Transaction(_pager, this, _transactionsCounter + 1, TransactionFlags.ReadWrite, FreeSpaceHandling))
+				using (var tx = new Transaction(_pager, this, _transactionsCounter + 1, TransactionFlags.ReadWrite, null))
 				{
-					FreeSpaceHandling.SetBufferForTransaction(tx);
 					var root = Tree.Create(tx, _sliceComparer);
 
 					// important to first create the tree, then set it on the env
@@ -89,6 +89,7 @@ namespace Voron
 
                     tx.Commit();
                 }
+
                 return;
             }
             // existing db, let us load it
@@ -97,7 +98,7 @@ namespace Voron
 			FileHeader* entry = FindLatestFileHeadeEntry();
 			NextPageNumber = entry->LastPageNumber + 1;
 			_transactionsCounter = entry->TransactionId + 1;
-			using (var tx = new Transaction(_pager, this, _transactionsCounter + 1, TransactionFlags.ReadWrite, FreeSpaceHandling))
+			using (var tx = new Transaction(_pager, this, _transactionsCounter + 1, TransactionFlags.ReadWrite, null))
 			{
 				var root = Tree.Open(tx, _sliceComparer, &entry->Root);
 
@@ -107,8 +108,6 @@ namespace Voron
 				var freeSpaceHeader = &entry->FreeSpace;
 				FreeSpaceHandling.Initialize(freeSpaceHeader);
 				FreeSpaceHandling.RecoverBuffers();
-
-				FreeSpaceHandling.SetBufferForTransaction(tx);
 
 				tx.Commit();
 			}
@@ -271,14 +270,13 @@ namespace Voron
 					_txWriter.Wait();
 					txLockTaken = true;
 				}
-				var tx = new Transaction(_pager, this, txId, flags, FreeSpaceHandling);
+				var tx = new Transaction(_pager, this, txId, flags, FreeSpaceHandling.GetBufferForNewTransaction(txId));
 				_activeTransactions.TryAdd(txId, tx);
 				var state = _pager.TransactionBegan();
 				tx.AddPagerState(state);
 
 				if (flags == TransactionFlags.ReadWrite)
 				{
-					FreeSpaceHandling.SetBufferForTransaction(tx);
 					tx.AfterCommit = TransactionAfterCommit;
 				}
 

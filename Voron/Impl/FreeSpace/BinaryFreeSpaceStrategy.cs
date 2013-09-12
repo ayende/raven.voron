@@ -75,7 +75,6 @@ namespace Voron.Impl.FreeSpace
 		private readonly LinkedList<FreedTransaction> registeredFreedPages = new LinkedList<FreedTransaction>();
 
 		private FreeSpaceHeader state;
-		private long _lastSearchPosition = -1;
 		private bool initialized;
 		private FreeSpaceInfo _info;
 
@@ -139,24 +138,6 @@ namespace Voron.Impl.FreeSpace
 			bits[1].SetBufferPointer((byte*)acquirePagePointer(state.SecondBufferPageNumber).ToPointer());
 		}
 
-		public Page TryAllocateFromFreeSpace(Transaction tx, int numberOfPages)
-		{
-			if (initialized == false)
-				return null; // this can happen the first time free space is initialized
-
-			if (bits[tx.Id & 1] == null)
-				throw new InvalidOperationException("The current buffer for transaction is null. Did you forget to set buffer for transaction?");
-
-			var page = Find(tx, numberOfPages);
-
-			if (page == -1)
-				return null;
-
-			var newPage = tx.Pager.Get(tx, page);
-			newPage.PageNumber = page;
-			return newPage;
-		}
-
 		public void RecoverBuffers()
 		{
 			if(bits.All(x => x.IsDirty == false))
@@ -172,9 +153,9 @@ namespace Voron.Impl.FreeSpace
 			cleanBuffer.CopyAllTo(dirtyBuffer);
 		}
 
-		public void SetBufferForTransaction(Transaction tx)
+		public UnmanagedBits GetBufferForNewTransaction(long txId)
 		{
-			var indexOfBuffer = tx.Id & 1;
+			var indexOfBuffer = txId & 1;
 
 			var next = bits[indexOfBuffer];
 			var reference = bits[1 - indexOfBuffer];
@@ -184,7 +165,7 @@ namespace Voron.Impl.FreeSpace
 				if (reference.IsDirty)
 					throw new InvalidDataException(
 						"Both buffers are dirty. Valid state of the free pages buffer cannot be restored. Transaction number: " +
-						tx.Id); // should never happen
+						txId); // should never happen
 
 				// last transaction was aborted and its buffer is dirty
 				// we have to copy pages according to modification bits from dirty buffer
@@ -198,82 +179,9 @@ namespace Voron.Impl.FreeSpace
 				reference.CopyDirtyBitsTo(next);
 			}
 			
-			next.InitializeProcessing();
-		}
+			next.ResetModifiedPages();
 
-		public long Find(Transaction tx, long numberOfFreePages)
-		{
-			var result = GetContinuousRangeOfFreePages(tx, numberOfFreePages);
-
-			if (result != -1)
-			{
-				var buffer = bits[tx.Id & 1];
-
-				for (var i = result; i < result + numberOfFreePages; i++)
-				{
-					buffer.MarkPage(i, false);// mark returned pages as busy
-				}
-
-				buffer.TotalNumberOfFreePages -= numberOfFreePages;
-			}
-
-			return result;
-		}
-
-		private long GetContinuousRangeOfFreePages(Transaction tx, long numberOfPagesToGet)
-		{
-			Debug.Assert(numberOfPagesToGet > 0);
-
-			if (initialized == false)
-				return -1;
-
-			var buffer = bits[tx.Id & 1];
-
-			if (numberOfPagesToGet > buffer.TotalNumberOfFreePages)
-				return -1;
-
-			var searched = 0;
-
-			long rangeStart = -1;
-			long rangeSize = 0;
-
-			var end = buffer.NumberOfTrackedPages - 1;
-
-			while (searched < buffer.NumberOfTrackedPages)
-			{
-				searched++;
-
-				if (_lastSearchPosition == end)
-				{
-					_lastSearchPosition = -1;
-					rangeStart = -1;
-					rangeSize = 0;
-				}
-
-				_lastSearchPosition++;
-
-				if (buffer.IsFree(_lastSearchPosition))
-				{
-					if (rangeSize == 0L) // nothing found
-					{
-						rangeStart = _lastSearchPosition;
-					}
-					rangeSize++;
-					if (rangeSize == numberOfPagesToGet)
-						break;
-					continue; // check next page
-				}
-
-				rangeSize = 0;
-				rangeStart = -1;
-			}
-
-			if (rangeSize < numberOfPagesToGet)
-				return -1;
-
-			Debug.Assert(rangeSize == numberOfPagesToGet);
-
-			return rangeStart;
+			return next;
 		}
 
 		public unsafe void MoveTo(long firstBufferPageStart, long secondBufferPageStart, long numberOfPagesToTrack, long numberOfPagesForTracking, int pageSize)
@@ -304,6 +212,8 @@ namespace Voron.Impl.FreeSpace
 			bits[0].MarkPages(oldHeader.SecondBufferPageNumber, oldHeader.NumberOfPagesTakenForTracking, true);
 			bits[1].MarkPages(oldHeader.SecondBufferPageNumber, oldHeader.NumberOfPagesTakenForTracking, true);
 
+			bits[0].Processed();
+			bits[1].Processed();
 
 			// update header
 			state = new FreeSpaceHeader
@@ -325,9 +235,13 @@ namespace Voron.Impl.FreeSpace
 				});
 		}
 
-		public void OnCommit(Transaction tx, long oldestTx, out List<long> dirtyPages)
+		public void OnCommit(UnmanagedBits buffer, long oldestTx, out List<long> dirtyPages)
 		{
-			var buffer = bits[tx.Id & 1];
+			if (buffer == null)
+			{
+				dirtyPages = new List<long>();
+				return;
+			}
 
 			while (registeredFreedPages.First != null && registeredFreedPages.First.Value.Id <= oldestTx)
 			{
@@ -362,11 +276,6 @@ namespace Voron.Impl.FreeSpace
 			{
 				unmanagedBits.IncreaseSize(newNumberOfPagesToTrack);
 			}
-		}
-
-		public bool IsFree(Transaction tx, long pageNumber)
-		{
-			return bits[tx.Id & 1].IsFree(pageNumber);
 		}
 	}
 }

@@ -22,7 +22,7 @@ namespace Voron.Impl
 		private readonly Dictionary<long, long> _dirtyPages = new Dictionary<long, long>();
 		private readonly List<long> _freedPages = new List<long>();
 		private readonly HashSet<PagerState> _pagerStates = new HashSet<PagerState>();
-		private readonly BinaryFreeSpaceStrategy _freeSpaceHandling;
+		private readonly UnmanagedBits _freeSpaceBuffer;
 
 		public TransactionFlags Flags { get; private set; }
 
@@ -61,12 +61,17 @@ namespace Voron.Impl
 			get { return modifiedTrees != null; }
 		}
 
-		public Transaction(IVirtualPager pager, StorageEnvironment env, long id, TransactionFlags flags, BinaryFreeSpaceStrategy freeSpaceHandling)
+		public UnmanagedBits FreeSpaceBuffer
+		{
+			get { return _freeSpaceBuffer; }
+		}
+
+		public Transaction(IVirtualPager pager, StorageEnvironment env, long id, TransactionFlags flags, UnmanagedBits freeSpaceBuffer)
 		{
 			_pager = pager;
 			_env = env;
 			_id = id;
-			_freeSpaceHandling = freeSpaceHandling;
+			_freeSpaceBuffer = freeSpaceBuffer;
 			Flags = flags;
 			NextPageNumber = env.NextPageNumber;
 		}
@@ -139,9 +144,24 @@ namespace Voron.Impl
 			return _pager.Get(this, n);
 		}
 
+		private Page TryAllocateFromFreeSpace(int numberOfPages)
+		{
+			if (_freeSpaceBuffer == null)
+				return null;
+
+			var page = _freeSpaceBuffer.Find(numberOfPages);
+
+			if (page == -1)
+				return null;
+
+			var newPage = _pager.Get(this, page);
+			newPage.PageNumber = page;
+			return newPage;
+		}
+
 		public Page AllocatePage(int numberOfPages)
 		{
-			Page page = _freeSpaceHandling.TryAllocateFromFreeSpace(this, numberOfPages);
+			Page page = TryAllocateFromFreeSpace(numberOfPages);
 			if (page == null) // allocate from end of file
 			{
 				if (numberOfPages > 1)
@@ -198,7 +218,7 @@ namespace Voron.Impl
 				tree.State.CopyTo(treePtr);
 			}
 
-			_freeSpaceHandling.RegisterFreePages(this, _freedPages);   // this is the the free space that is available when all concurrent transactions are done
+			_env.FreeSpaceHandling.RegisterFreePages(this, _freedPages);   // this is the the free space that is available when all concurrent transactions are done
 
 			if (_rootTreeData != null)
 			{
@@ -209,7 +229,7 @@ namespace Voron.Impl
 			_env.NextPageNumber = NextPageNumber;
 
 			List<long> freeSpacePagesToFlush;
-			_freeSpaceHandling.OnCommit(this, _env.OldestTransaction, out freeSpacePagesToFlush);
+			_env.FreeSpaceHandling.OnCommit(_freeSpaceBuffer, _env.OldestTransaction, out freeSpacePagesToFlush);
 
 			// add pages modified in free space handling to dirty list in order to flush them
 			foreach (var bufferDirtyPage in freeSpacePagesToFlush)
@@ -264,7 +284,7 @@ namespace Voron.Impl
 			var fileHeader = (FileHeader*)pg.Base;
 			fileHeader->TransactionId = _id;
 			fileHeader->LastPageNumber = NextPageNumber - 1;
-			_freeSpaceHandling.CopyStateTo(&fileHeader->FreeSpace);
+			_env.FreeSpaceHandling.CopyStateTo(&fileHeader->FreeSpace);
 			_env.Root.State.CopyTo(&fileHeader->Root);
 		}
 

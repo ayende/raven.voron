@@ -116,8 +116,8 @@ namespace Voron.Impl
 			// we always allocate twice as much as we actually need, because we don't 
 
 			// we request twice because it would likely be easier to find two smaller pieces than one big piece
-			var firstBufferPageStart = tx.Environment.FreeSpaceHandling.Find(tx, requiredPages);
-			var secondBufferPageStart = tx.Environment.FreeSpaceHandling.Find(tx, requiredPages);
+			var firstBufferPageStart = tx.FreeSpaceBuffer.Find(requiredPages);
+			var secondBufferPageStart = tx.FreeSpaceBuffer.Find(requiredPages);
 
 			// this is a bit of a hack, because we modify the NextPageNumber just before
 			// the tx is going to modify it, too.
@@ -142,6 +142,14 @@ namespace Voron.Impl
 
 			tx.Environment.FreeSpaceHandling.MoveTo(firstBufferPageStart, secondBufferPageStart, NumberOfAllocatedPages,
 			                                        requiredPages, PageSize);
+
+			// after moving buffers to new pages make sure that they are flushed
+			var buffersPages = tx.Environment.FreeSpaceHandling.Info.GetBuffersPages();
+			buffersPages.Sort();
+
+			Flush(buffersPages);
+			//TODO are flush free space handling header
+			Sync();
 		}
 
 	    public virtual void Dispose()

@@ -32,6 +32,8 @@ namespace Voron.Impl.FreeSpace
 
 		private readonly List<long> internallyCopiedPages = new List<long>();
 
+		private long _lastSearchPosition = -1;
+
 		public UnmanagedBits(byte* ptr, long startPageNumber, long sizeInBytes, long numberOfPages, int pageSize)
 		{
 			this.sizeInBytes = sizeInBytes;
@@ -58,6 +60,8 @@ namespace Voron.Impl.FreeSpace
 			NativeMethods.memset(rawPtr, 0, (int)this.sizeInBytes); // clean all bits
 
 			TotalNumberOfFreePages = 0;
+
+			IsDirty = false;
 		}
 
 		public long NumberOfTrackedPages { get; private set; }
@@ -113,12 +117,6 @@ namespace Voron.Impl.FreeSpace
 			}
 		}
 
-		public void InitializeProcessing()
-		{
-			IsDirty = true;
-			ResetModifiedPages();
-		}
-
 		public void Processed()
 		{
 			IsDirty = false;
@@ -127,12 +125,16 @@ namespace Voron.Impl.FreeSpace
 
 		public void MarkPage(long page, bool val)
 		{
+			IsDirty = true;
+
 			SetBit(freePagesPtr, page, val);
 			SetBit(modificationBitsPtr, page/(pageSize*8), true); // mark dirty
 		}
 
 		public void MarkPages(long startPage, long count, bool val)
 		{
+			IsDirty = true;
+
 			SetBits(freePagesPtr, startPage, count, val);
 
 			var fistModificationBitToSet = startPage/(pageSize*8);
@@ -142,7 +144,7 @@ namespace Voron.Impl.FreeSpace
 			SetBits(modificationBitsPtr, fistModificationBitToSet, numberOfModificationBitsToSet, true); // mark dirty
 		}
 
-		private void ResetModifiedPages()
+		public void ResetModifiedPages()
 		{
 			SetBits(modificationBitsPtr, 0, AllModificationBits, false);
 		}
@@ -330,6 +332,74 @@ namespace Voron.Impl.FreeSpace
 			}
 
 			return modificationBits;
+		}
+
+		public long Find(long numberOfFreePages)
+		{
+			var result = GetContinuousRangeOfFreePages(numberOfFreePages);
+
+			if (result != -1)
+			{
+				for (var i = result; i < result + numberOfFreePages; i++)
+				{
+					MarkPage(i, false);// mark returned pages as busy
+				}
+
+				TotalNumberOfFreePages -= numberOfFreePages;
+			}
+
+			return result;
+		}
+
+		private long GetContinuousRangeOfFreePages(long numberOfPagesToGet)
+		{
+			Debug.Assert(numberOfPagesToGet > 0);
+
+			if (numberOfPagesToGet > TotalNumberOfFreePages)
+				return -1;
+
+			var searched = 0;
+
+			long rangeStart = -1;
+			long rangeSize = 0;
+
+			var end = NumberOfTrackedPages - 1;
+
+			while (searched < NumberOfTrackedPages)
+			{
+				searched++;
+
+				if (_lastSearchPosition == end)
+				{
+					_lastSearchPosition = -1;
+					rangeStart = -1;
+					rangeSize = 0;
+				}
+
+				_lastSearchPosition++;
+
+				if (IsFree(_lastSearchPosition))
+				{
+					if (rangeSize == 0L) // nothing found
+					{
+						rangeStart = _lastSearchPosition;
+					}
+					rangeSize++;
+					if (rangeSize == numberOfPagesToGet)
+						break;
+					continue; // check next page
+				}
+
+				rangeSize = 0;
+				rangeStart = -1;
+			}
+
+			if (rangeSize < numberOfPagesToGet)
+				return -1;
+
+			Debug.Assert(rangeSize == numberOfPagesToGet);
+
+			return rangeStart;
 		}
 	}
 }
