@@ -235,9 +235,9 @@ namespace Voron.Impl.FreeSpace
 				});
 		}
 
-		public void OnCommit(UnmanagedBits buffer, long oldestTx, out List<long> dirtyPages)
+		public void OnTransactionCommit(Transaction tx, long oldestTx, out List<long> dirtyPages)
 		{
-			if (buffer == null)
+			if (tx.FreeSpaceBuffer == null)
 			{
 				dirtyPages = new List<long>();
 				return;
@@ -250,15 +250,15 @@ namespace Voron.Impl.FreeSpace
 
 				foreach (var freedPage in val.Pages)
 				{
-					buffer.MarkPage(freedPage, true);
+					tx.FreeSpaceBuffer.MarkPage(freedPage, true);
 				}
 
-				buffer.TotalNumberOfFreePages += val.Pages.Count;
+				tx.FreeSpaceBuffer.TotalNumberOfFreePages += val.Pages.Count;
 			}
 
-			dirtyPages = buffer.DirtyPages;
+			dirtyPages = tx.FreeSpaceBuffer.DirtyPages;
 
-			buffer.Processed();
+			tx.FreeSpaceBuffer.Processed();
 		}
 
 		public unsafe void CopyStateTo(FreeSpaceHeader* freeSpaceHeader)
