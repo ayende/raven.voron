@@ -9,7 +9,7 @@ using Xunit;
 
 namespace Voron.Tests.Impl.Free
 {
-	public class BinaryFreeSpaceStrategyTests : StorageTest
+	public class FreeSpaceTests : StorageTest
 	{
 		[Fact]
 		public void ShouldNotFindAnyFreePagesWhenThereAreNone()
@@ -187,6 +187,33 @@ namespace Voron.Tests.Impl.Free
 				// should take from the begin
 				firstFreePage = tx.FreeSpaceBuffer.Find(2);
 				Assert.Equal(0, firstFreePage);
+			}
+		}
+
+		[Fact]
+		public void LastSearchingPositionShouldBeSharedBetweenBuffers()
+		{
+			using (var tx1 = Env.NewTransaction(TransactionFlags.ReadWrite))
+			{
+				Env.FreeSpaceHandling.RegisterFreePages(tx1, new List<long> { 6, 7, 8, 9 });
+
+				tx1.Commit();
+			}
+
+			using (var tx2 = Env.NewTransaction(TransactionFlags.ReadWrite))
+			{
+				tx2.FreeSpaceBuffer.Find(2);
+
+				Env.FreeSpaceHandling.RegisterFreePages(tx2, new List<long> { 1, 2 });
+
+				tx2.Commit();
+			}
+
+			using (var tx3 = Env.NewTransaction(TransactionFlags.ReadWrite))
+			{
+				var start = tx3.FreeSpaceBuffer.Find(2);
+
+				Assert.Equal(8, start);
 			}
 		}
 	}

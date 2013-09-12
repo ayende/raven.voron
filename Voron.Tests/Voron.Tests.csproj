@@ -52,7 +52,7 @@
     <Compile Include="Backup\CanBackupData.cs" />
     <Compile Include="Bugs\EmptyTree.cs" />
     <Compile Include="Bugs\UpdateLastItem.cs" />
-    <Compile Include="Impl\Free\BinaryFreeSpaceStrategyTests.cs" />
+    <Compile Include="Impl\Free\FreeSpaceTests.cs" />
     <Compile Include="MultiValueTree.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Storage\Batches.cs" />

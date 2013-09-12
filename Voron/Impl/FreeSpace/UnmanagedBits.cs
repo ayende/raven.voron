@@ -270,6 +270,8 @@ namespace Voron.Impl.FreeSpace
 			if(copied > 0)
 				other.RefreshNumberOfFreePages();
 
+			other._lastSearchPosition = _lastSearchPosition;
+
 			return copied;
 		}
 
