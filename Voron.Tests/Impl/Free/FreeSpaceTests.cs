@@ -247,5 +247,22 @@ namespace Voron.Tests.Impl.Free
 			Assert.Same(tx2Buffer, tx4Buffer);
 			Assert.NotSame(tx1Buffer, tx2Buffer);
 		}
+
+		[Fact]
+		public void FreeSpaceChangesShouldBeVisibleBetweenTransactions()
+		{
+			using (var tx1 = Env.NewTransaction(TransactionFlags.ReadWrite))
+			{
+				tx1.FreePage(4);
+				tx1.FreePage(5);
+				tx1.Commit();
+			}
+
+			using (var tx2 = Env.NewTransaction(TransactionFlags.ReadWrite))
+			{
+				var page = tx2.FreeSpaceBuffer.Find(2);
+				Assert.Equal(4, page);
+			}
+		}
 	}
 }
