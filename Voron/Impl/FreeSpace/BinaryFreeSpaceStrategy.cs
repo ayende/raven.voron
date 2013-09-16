@@ -214,6 +214,9 @@ namespace Voron.Impl.FreeSpace
 			_bits[0].MarkPages(oldHeader.SecondBufferPageNumber, oldHeader.NumberOfPagesTakenForTracking, true);
 			_bits[1].MarkPages(oldHeader.SecondBufferPageNumber, oldHeader.NumberOfPagesTakenForTracking, true);
 
+			_bits[0].TotalNumberOfFreePages += 2*oldHeader.NumberOfPagesTakenForTracking; // for each buffer
+			_bits[1].TotalNumberOfFreePages += 2*oldHeader.NumberOfPagesTakenForTracking;
+
 			_bits[0].Processed();
 			_bits[1].Processed();
 

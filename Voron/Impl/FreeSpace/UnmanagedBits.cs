@@ -237,8 +237,7 @@ namespace Voron.Impl.FreeSpace
 									  (int)(BytesTakenByModificationBits + DirtyFlagSizeInBytes));
 			}
 
-			other.NumberOfTrackedPages = NumberOfTrackedPages;
-
+			other.TotalNumberOfFreePages = TotalNumberOfFreePages;
 			
 			for (int i = 0; i < other._allocatedPages; i++)
 			{
