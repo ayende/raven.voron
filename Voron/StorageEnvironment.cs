@@ -9,6 +9,7 @@ using Voron.Impl;
 using Voron.Impl.FileHeaders;
 using Voron.Impl.FreeSpace;
 using Voron.Trees;
+using Voron.Util;
 
 namespace Voron
 {
@@ -70,10 +71,11 @@ namespace Voron
 						SecondBufferPageNumber = 3,
 						NumberOfPagesTakenForTracking = 1,
 						NumberOfTrackedPages = _pager.NumberOfAllocatedPages,
-						PageSize = _pager.PageSize
+						PageSize = _pager.PageSize,
+						Checksum = Crc.ForEmptyInitialBuffer(_pager.PageSize)
 					};
 
-				FreeSpaceHandling.Initialize(&freeSpaceHeader);
+				FreeSpaceHandling.Initialize(&freeSpaceHeader, true);
 
 				NextPageNumber = 4;
 
@@ -220,6 +222,7 @@ namespace Voron
 			fileHeader->FreeSpace.NumberOfTrackedPages = 0;
 			fileHeader->FreeSpace.NumberOfPagesTakenForTracking = 0;
 			fileHeader->FreeSpace.PageSize = -1;
+			fileHeader->FreeSpace.Checksum = 0;
 			fileHeader->Root.RootPageNumber = -1;
 		}
 

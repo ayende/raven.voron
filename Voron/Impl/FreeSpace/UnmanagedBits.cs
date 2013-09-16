@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Runtime.CompilerServices;
+using Voron.Util;
 
 namespace Voron.Impl.FreeSpace
 {
@@ -56,8 +57,6 @@ namespace Voron.Impl.FreeSpace
 			Debug.Assert(numberOfPages <= MaxNumberOfPages);
 
 			SetBufferPointer(ptr);
-
-			NativeMethods.memset(_rawPtr, 0, (int)_sizeInBytes); // clean all bits
 
 			TotalNumberOfFreePages = 0;
 
@@ -401,6 +400,18 @@ namespace Voron.Impl.FreeSpace
 			Debug.Assert(rangeSize == numberOfPagesToGet);
 
 			return rangeStart;
+		}
+
+		public uint CalculateChecksum()
+		{
+			return Crc.Value(_rawPtr, 0, (int)_sizeInBytes);
+		}
+
+		public void Clear()
+		{
+			NativeMethods.memset(_rawPtr, 0, (int)_sizeInBytes); // clean all bits
+
+			TotalNumberOfFreePages = 0;
 		}
 	}
 }

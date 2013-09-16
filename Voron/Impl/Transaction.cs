@@ -232,6 +232,8 @@ namespace Voron.Impl
 			List<long> dirtyFreeSpacePages;
 			_env.FreeSpaceHandling.OnTransactionCommit(this, _env.OldestTransaction, out dirtyFreeSpacePages);
 
+			_env.FreeSpaceHandling.UpdateChecksum(this);
+
 			// Because we don't know in what order the OS will flush the pages 
 			// we need to do this twice, once for the data, and then once for the metadata
 

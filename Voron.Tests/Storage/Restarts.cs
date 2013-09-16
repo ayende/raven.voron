@@ -1,4 +1,5 @@
-﻿using System.IO;
+﻿using System.Diagnostics;
+using System.IO;
 using Voron.Impl;
 using Xunit;
 
@@ -76,15 +77,30 @@ namespace Voron.Tests.Storage
 		[Fact]
 		public void FreeSpaceBuffersAreRecoveredAfterRestartIfNecessary()
 		{
-			//TODO arek
 			using (var pureMemoryPager = new PureMemoryPager())
 			{
+				long totalNumberOfFreePages;
+
 				using (var env = new StorageEnvironment(pureMemoryPager, ownsPager: false))
 				{
 					using (var tx = env.NewTransaction(TransactionFlags.ReadWrite))
 					{
 						env.Root.Add(tx, "test/1", new MemoryStream());
-						// tx.Commit(); - intentionally do not commit, this will mark buffer as dirty
+						tx.Commit();
+					}
+
+					using (var tx = env.NewTransaction(TransactionFlags.ReadWrite))
+					{
+						env.Root.Delete(tx, "test/1");
+						tx.Commit();
+
+						totalNumberOfFreePages = tx.FreeSpaceBuffer.TotalNumberOfFreePages;
+					}
+
+					using (var tx = env.NewTransaction(TransactionFlags.ReadWrite))
+					{
+						env.Root.Add(tx, "test/1", new MemoryStream()); // this will take one free page and mark them as busy but note that we don't commit this transaction
+						// tx.Commit(); - intentionally do not commit, this will cause buffers checksum mismatch
 					}
 				}
 
@@ -92,7 +108,12 @@ namespace Voron.Tests.Storage
 				{
 					using (var tx = env.NewTransaction(TransactionFlags.ReadWrite))
 					{
-						env.Root.Add(tx, "test/1", new MemoryStream());
+						Assert.Equal(totalNumberOfFreePages, tx.FreeSpaceBuffer.TotalNumberOfFreePages);
+						tx.Commit();
+					}
+					using (var tx = env.NewTransaction(TransactionFlags.ReadWrite))
+					{
+						Assert.Equal(totalNumberOfFreePages, tx.FreeSpaceBuffer.TotalNumberOfFreePages);
 						tx.Commit();
 					}
 				}

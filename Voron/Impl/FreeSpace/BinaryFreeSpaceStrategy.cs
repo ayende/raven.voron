@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using Voron.Impl.FileHeaders;
 
 namespace Voron.Impl.FreeSpace
@@ -112,25 +113,35 @@ namespace Voron.Impl.FreeSpace
 			_acquirePagePointer = acquirePagePointer;
 		}
 
-		public unsafe void Initialize(FreeSpaceHeader* header)
+		public unsafe void Initialize(FreeSpaceHeader* header, bool clearBuffers = false)
 		{
 			_bits[0] = new UnmanagedBits((byte*) _acquirePagePointer(header->FirstBufferPageNumber).ToPointer(),
 			                            header->FirstBufferPageNumber, header->NumberOfPagesTakenForTracking*header->PageSize,
 			                            header->NumberOfTrackedPages, header->PageSize);
-			_bits[0].RefreshNumberOfFreePages();
+			
 
 			_bits[1] = new UnmanagedBits((byte*) _acquirePagePointer(header->SecondBufferPageNumber).ToPointer(),
 			                            header->SecondBufferPageNumber, header->NumberOfPagesTakenForTracking*header->PageSize,
 			                            header->NumberOfTrackedPages, header->PageSize);
-			_bits[1].RefreshNumberOfFreePages();
-
+			if (clearBuffers)
+			{
+				_bits[0].Clear();
+				_bits[1].Clear();
+			}
+			else
+			{
+				_bits[1].RefreshNumberOfFreePages();
+				_bits[0].RefreshNumberOfFreePages();
+			}
+			
 			_state = new FreeSpaceHeader
 				{
 					FirstBufferPageNumber = header->FirstBufferPageNumber,
 					SecondBufferPageNumber = header->SecondBufferPageNumber,
 					NumberOfPagesTakenForTracking = header->NumberOfPagesTakenForTracking,
 					NumberOfTrackedPages = header->NumberOfTrackedPages,
-					PageSize = header->PageSize
+					PageSize = header->PageSize,
+					Checksum = header->Checksum
 				};
 		}
 
@@ -142,17 +153,22 @@ namespace Voron.Impl.FreeSpace
 
 		public void RecoverBuffers()
 		{
-			if(_bits.All(x => x.IsDirty == false))
+			var firstBufferMatch = _bits[0].CalculateChecksum() == _state.Checksum;
+			var secondBufferMatch = _bits[1].CalculateChecksum() == _state.Checksum;
+
+			if(firstBufferMatch && secondBufferMatch)
 				return;
 
-			if(_bits.All(x => x.IsDirty))
+			if(firstBufferMatch == false && secondBufferMatch == false)
 				throw new InvalidDataException(
-						"Both buffers are dirty. Valid state of the free pages buffer cannot be restored during buffers recovery"); // should never happen
+						"Checksum mismatch. Both buffers are in invalid state. Valid state of the free pages buffer cannot be restored during buffers recovery"); // should never happen
 
-			var dirtyBuffer = _bits.First(x => x.IsDirty);
-			var cleanBuffer = _bits.First(x => x.IsDirty == false);
+			var validBufferIndex = firstBufferMatch ? 0 : 1;
 
-			cleanBuffer.CopyAllTo(dirtyBuffer);
+			var validBuffer = _bits[validBufferIndex];
+			var dirtyBuffer = _bits[1 - validBufferIndex];
+
+			validBuffer.CopyAllTo(dirtyBuffer);
 		}
 
 		public UnmanagedBits GetBufferForNewTransaction(long txId)
@@ -193,6 +209,7 @@ namespace Voron.Impl.FreeSpace
 			                                       numberOfPagesForTracking*pageSize,
 			                                       numberOfPagesToTrack,
 			                                       pageSize);
+			newFirstBuffer.Clear();
 
 			_bits[0].CopyAllTo(newFirstBuffer);
 			_bits[0] = newFirstBuffer;
@@ -202,6 +219,8 @@ namespace Voron.Impl.FreeSpace
 			                                        numberOfPagesForTracking*pageSize,
 			                                        numberOfPagesToTrack,
 			                                        pageSize);
+			newSecondBuffer.Clear();
+
 			_bits[1].CopyAllTo(newSecondBuffer);
 			_bits[1] = newSecondBuffer;
 
@@ -227,7 +246,8 @@ namespace Voron.Impl.FreeSpace
 				SecondBufferPageNumber = secondBufferPageStart,
 				NumberOfTrackedPages = numberOfPagesToTrack,
 				NumberOfPagesTakenForTracking = numberOfPagesForTracking,
-				PageSize = pageSize
+				PageSize = pageSize,
+				Checksum = _bits.First(x => x.IsDirty == false).CalculateChecksum()
 			};
 		}
 
@@ -270,6 +290,7 @@ namespace Voron.Impl.FreeSpace
 			_lastCommittedWriteTransactionBuffer = tx.FreeSpaceBuffer;
 		}
 
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public unsafe void CopyStateTo(FreeSpaceHeader* freeSpaceHeader)
 		{
 			freeSpaceHeader->FirstBufferPageNumber = _state.FirstBufferPageNumber;
@@ -277,6 +298,7 @@ namespace Voron.Impl.FreeSpace
 			freeSpaceHeader->NumberOfTrackedPages = _state.NumberOfTrackedPages;
 			freeSpaceHeader->NumberOfPagesTakenForTracking = _state.NumberOfPagesTakenForTracking;
 			freeSpaceHeader->PageSize = _state.PageSize;
+			freeSpaceHeader->Checksum = _state.Checksum;
 		}
 
 		public void TrackMorePages(long newNumberOfPagesToTrack)
@@ -285,6 +307,15 @@ namespace Voron.Impl.FreeSpace
 			{
 				unmanagedBits.IncreaseSize(newNumberOfPagesToTrack);
 			}
+		}
+
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		public void UpdateChecksum(Transaction tx)
+		{
+			if(tx.FreeSpaceBuffer == null)
+				return;
+
+			_state.Checksum = tx.FreeSpaceBuffer.CalculateChecksum();
 		}
 	}
 }

@@ -21,6 +21,7 @@ namespace Voron.Impl.FileHeaders
 		public long NumberOfPagesTakenForTracking;
 		[FieldOffset(32)]
 		public int PageSize;
-		
+		[FieldOffset(36)]
+		public uint Checksum;
 	}
 }
