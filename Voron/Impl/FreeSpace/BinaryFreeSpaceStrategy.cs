@@ -209,7 +209,6 @@ namespace Voron.Impl.FreeSpace
 			                                       numberOfPagesForTracking*pageSize,
 			                                       numberOfPagesToTrack,
 			                                       pageSize);
-			newFirstBuffer.Clear();
 
 			_bits[0].CopyAllTo(newFirstBuffer);
 			_bits[0] = newFirstBuffer;
@@ -219,7 +218,6 @@ namespace Voron.Impl.FreeSpace
 			                                        numberOfPagesForTracking*pageSize,
 			                                        numberOfPagesToTrack,
 			                                        pageSize);
-			newSecondBuffer.Clear();
 
 			_bits[1].CopyAllTo(newSecondBuffer);
 			_bits[1] = newSecondBuffer;
