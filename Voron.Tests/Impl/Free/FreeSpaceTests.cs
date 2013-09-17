@@ -4,7 +4,6 @@
 //  </copyright>
 // -----------------------------------------------------------------------
 
-using System.IO;
 using Voron.Impl.FreeSpace;
 using Xunit;
 

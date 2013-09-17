@@ -5,6 +5,7 @@
 // -----------------------------------------------------------------------
 
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using Voron.Impl.FreeSpace;
 using Xunit;
@@ -204,7 +205,7 @@ namespace Voron.Tests.Impl.Free
 				var bits1 = new UnmanagedBits(ptr1, 0, bytes1.Length, 65472, pageSize);
 
 				// 98240 - is the max number of bits for buffer with size 12288 bytes
-				var bits2 = new UnmanagedBits(ptr2, 0, bytes2.Length, 98240, pageSize);
+				var bits2 = new UnmanagedBits(ptr2, 2, bytes2.Length, 98240, pageSize);
 
 				var rand = new Random();
 				var maxNumberOfChanges = rand.Next(20000, 40000);
@@ -262,12 +263,85 @@ namespace Voron.Tests.Impl.Free
 
 				const long lastBitInFirstBufferPage = 32768 - 1;
 
-				bits.MarkPages(lastBitInFirstBufferPage, 2, true); // should mark modification bits as true on positionss 0 and 1
+				bits.MarkPages(lastBitInFirstBufferPage, 2, true); // should mark modification bits as true on positions 0 and 1
 
 				var modificationBits = bits.GetModificationBits();
 
 				Assert.True(modificationBits[0]);
 				Assert.True(modificationBits[1]);
+			}
+		}
+
+		[Fact]
+		public void GettingDirtyPagesShouldReturnPagesWhereBitsWereModifiedAndLastPage()
+		{
+			const int pageSize = 4096;
+			const long startPage = 0;
+
+			var bytes = new byte[5 * 4096]; // allocate five pages
+
+			fixed (byte* ptr = bytes)
+			{
+				var bits = new UnmanagedBits(ptr, startPage, bytes.Length, 100000, pageSize);
+
+				bits.MarkPage(40000, true); // modification on the second buffer's page
+				bits.MarkPage(90000, false); // setting false will also be also marked as modification, this time on the third buffer's page
+
+				var dirtyPages = bits.GetDirtyPages();
+
+				// should return two pages where modifications occurred and last page where modification bits and isDirty flag are written
+				Assert.Equal(new List<long>{1,2,4}, dirtyPages);
+			}
+		}
+
+		[Fact]
+		public void AfterCopyingEntireBufferAllPagesTakenByBufferShouldBeReturnedAsDirty()
+		{
+			const int pageSize = 4096;
+
+			var bytes1 = new byte[2 * pageSize];
+			var bytes2 = new byte[3 * pageSize];
+
+			fixed (byte* ptr1 = bytes1)
+			fixed (byte* ptr2 = bytes2)
+			{
+				// 65472 - is the max number of bits for buffer with size 8192 bytes
+				var bits1 = new UnmanagedBits(ptr1, 0, bytes1.Length, 65472, pageSize);
+
+				// 98240 - is the max number of bits for buffer with size 12288 bytes
+				var bits2 = new UnmanagedBits(ptr2, 2, bytes2.Length, 98240, pageSize);
+
+				bits1.CopyAllTo(bits2);
+
+				var dirtyPages = bits2.GetDirtyPages();
+
+				Assert.Equal(new List<long> { 2, 3, 4 }, dirtyPages);
+			}
+		}
+
+		[Fact]
+		public void CopyingPagesWhereBitsWereModifiedShouldMarkThemAsDirty()
+		{
+			const int pageSize = 4096;
+
+			var bytes1 = new byte[2 * pageSize];
+			var bytes2 = new byte[2 * pageSize];
+
+			fixed (byte* ptr1 = bytes1)
+			fixed (byte* ptr2 = bytes2)
+			{
+				// 65472 - is the max number of bits for buffer with size 8192 bytes
+				var bits1 = new UnmanagedBits(ptr1, 0, bytes1.Length, 65472, pageSize);
+				var bits2 = new UnmanagedBits(ptr2, 2, bytes2.Length, 65472, pageSize);
+
+				bits1.MarkPage(0, true);
+				bits1.MarkPage(40000, true);
+
+				bits1.CopyDirtyBitsTo(bits2);
+
+				var dirtyPages = bits2.GetDirtyPages();
+
+				Assert.Equal(new List<long> { 2, 3 }, dirtyPages);
 			}
 		}
 	}
