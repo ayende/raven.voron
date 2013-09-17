@@ -86,34 +86,31 @@ namespace Voron.Impl.FreeSpace
 			private set { *(_dirtyFlagPtr) = value ? 1 : 0; }
 		}
 
-		public List<long> DirtyPages
+		public List<long> GetDirtyPages()
 		{
-			get
+			var result = new HashSet<long>(_internallyCopiedPages);
+
+			// add pages where free bits were modified
+			for (var i = 0; i < ModificationBitsInUse; i++)
 			{
-				var result = new HashSet<long>(_internallyCopiedPages);
+				if (GetBit(_modificationBitsPtr, ModificationBitsInUse, i) == false)
+					continue;
 
-				// add pages where free bits were modified
-				for (var i = 0; i < ModificationBitsInUse; i++)
-				{
-					if (GetBit(_modificationBitsPtr, ModificationBitsInUse, i) == false)
-						continue;
-
-					result.Add(StartPageNumber + i);
-				}
-
-				// add last page where IsDirty flag is contained and all pages where modifications bits are contained
-				// most of the cases everything will be contained in a one page
-				var lastPageNumber = StartPageNumber + _allocatedPages - 1;
-
-				var numberOfPagesTakenByModificationBitsAndDirtyFlag = DivideAndRoundUp(BytesTakenByModificationBits + DirtyFlagSizeInBytes, _pageSize);
-
-				for (var i = 0; i < numberOfPagesTakenByModificationBitsAndDirtyFlag; i++)
-				{
-					result.Add(lastPageNumber - i);
-				}
-
-				return result.ToList();
+				result.Add(StartPageNumber + i);
 			}
+
+			// add last page where IsDirty flag is contained and all pages where modifications bits are contained
+			// most of the cases everything will be contained in a one page
+			var lastPageNumber = StartPageNumber + _allocatedPages - 1;
+
+			var numberOfPagesTakenByModificationBitsAndDirtyFlag = DivideAndRoundUp(BytesTakenByModificationBits + DirtyFlagSizeInBytes, _pageSize);
+
+			for (var i = 0; i < numberOfPagesTakenByModificationBitsAndDirtyFlag; i++)
+			{
+				result.Add(lastPageNumber - i);
+			}
+
+			return result.ToList();
 		}
 
 		public void Processed()

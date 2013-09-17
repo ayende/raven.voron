@@ -258,14 +258,8 @@ namespace Voron.Impl.FreeSpace
 				});
 		}
 
-		public void OnTransactionCommit(Transaction tx, long oldestTx, out List<long> dirtyPages)
+		public void OnTransactionCommit(UnmanagedBits buffer, long oldestTx, out List<long> dirtyPages)
 		{
-			if (tx.FreeSpaceBuffer == null)
-			{
-				dirtyPages = null;
-				return;
-			}
-
 			while (_registeredFreedPages.First != null && _registeredFreedPages.First.Value.Id <= oldestTx)
 			{
 				var val = _registeredFreedPages.First.Value;
@@ -273,19 +267,17 @@ namespace Voron.Impl.FreeSpace
 
 				foreach (var freedPage in val.Pages)
 				{
-					tx.FreeSpaceBuffer.MarkPage(freedPage, true);
+					buffer.MarkPage(freedPage, true);
 				}
 
-				tx.FreeSpaceBuffer.TotalNumberOfFreePages += val.Pages.Count;
+				buffer.TotalNumberOfFreePages += val.Pages.Count;
 			}
 
-			dirtyPages = tx.FreeSpaceBuffer.DirtyPages;
+			dirtyPages = buffer.GetDirtyPages();
 
-			tx.FreeSpaceBuffer.Processed();
+			buffer.Processed();
 
-			Debug.Assert(tx.Flags == TransactionFlags.ReadWrite);
-			
-			_lastCommittedWriteTransactionBuffer = tx.FreeSpaceBuffer;
+			_lastCommittedWriteTransactionBuffer = buffer;
 		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -308,12 +300,9 @@ namespace Voron.Impl.FreeSpace
 		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public void UpdateChecksum(Transaction tx)
+		public void UpdateChecksum(uint bufferChecksum)
 		{
-			if(tx.FreeSpaceBuffer == null)
-				return;
-
-			_state.Checksum = tx.FreeSpaceBuffer.CalculateChecksum();
+			_state.Checksum = bufferChecksum;
 		}
 	}
 }
