@@ -4,6 +4,7 @@
 //  </copyright>
 // -----------------------------------------------------------------------
 
+using System;
 using Voron.Impl.FreeSpace;
 using Xunit;
 
@@ -341,6 +342,8 @@ namespace Voron.Tests.Impl.Free
 		[Fact]
 		public void FreeSpaceBufferOfAbortedTransactionShouldBeRecovered()
 		{
+            if(Environment.Is64BitProcess == false)
+                throw new NotSupportedException("This test can only pass is 64 bits");
 			using (var tx = Env.NewTransaction(TransactionFlags.ReadWrite))
 			{
 				tx.Pager.AllocateMorePages(tx, 1024 * 1024 * 5);
