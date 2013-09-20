@@ -68,8 +68,17 @@ namespace Voron.Impl
 		{
 			var mmf = MemoryMappedFile.CreateFromFile(_fileStream, Guid.NewGuid().ToString(), _fileStream.Length,
 													  MemoryMappedFileAccess.ReadWrite, null, HandleInheritability.None, true);
-			var accessor = mmf.CreateViewAccessor();
-			byte* p = null;
+			MemoryMappedViewAccessor accessor;
+		    try
+		    {
+		        accessor = mmf.CreateViewAccessor();
+		    }
+		    catch (Exception)
+		    {
+                mmf.Dispose();
+		        throw;
+		    }
+		    byte* p = null;
 			accessor.SafeMemoryMappedViewHandle.AcquirePointer(ref p);
 
 			var newPager = new PagerState
