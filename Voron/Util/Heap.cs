@@ -49,10 +49,11 @@ namespace Voron.Util
 
         public void Dispose()
         {
-            if(HeapDestroy(_heap) == false)
-                throw new Win32Exception();
+            var success = HeapDestroy(_heap);
             _heap = IntPtr.Zero;
             GC.SuppressFinalize(this);
+            if (success == false)
+                throw new Win32Exception();
         }
     }
 }

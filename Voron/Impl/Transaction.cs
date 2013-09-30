@@ -246,18 +246,13 @@ namespace Voron.Impl
 				_env.FreeSpaceHandling.OnTransactionCommit(_freeSpaceBuffer, _env.OldestTransaction, out dirtyFreeSpacePages);
 				_env.FreeSpaceHandling.UpdateChecksum(_freeSpaceBuffer.CalculateChecksum());
 			}
-			
-			// Because we don't know in what order the OS will flush the pages 
-			// we need to do this twice, once for the data, and then once for the metadata
 
-			var sortedPagesToFlush = _dirtyPages.Select(x => x.Value).Distinct().ToList();
 
-			// add pages modified in free space handling to dirty list in order to flush them
-			if (dirtyFreeSpacePages != null)
-				sortedPagesToFlush.AddRange(dirtyFreeSpacePages);
-
-			sortedPagesToFlush.Sort();
-			_pager.Flush(sortedPagesToFlush);
+		    var sortedPages = _dirtyPagesBackend.OrderBy(x => x.Key).Select(x => x.Value);
+		    foreach (var sortedPage in sortedPages)
+		    {
+		        _pager.Write(sortedPage);
+		    }
 
 			WriteHeader(_pager.Get(this, _id & 1)); // this will cycle between the first and second pages
 
