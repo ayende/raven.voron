@@ -67,7 +67,7 @@ namespace Voron.Impl
 		private PagerState CreateNewPagerState()
 		{
 			var mmf = MemoryMappedFile.CreateFromFile(_fileStream, Guid.NewGuid().ToString(), _fileStream.Length,
-													  MemoryMappedFileAccess.ReadWrite, null, HandleInheritability.None, true);
+													  MemoryMappedFileAccess.Read, null, HandleInheritability.None, true);
 			MemoryMappedViewAccessor accessor;
 		    try
 		    {
