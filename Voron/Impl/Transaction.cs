@@ -20,6 +20,7 @@ namespace Voron.Impl
 		private Dictionary<Tuple<Tree, Slice>, Tree> _multiValueTrees;
 		private readonly Dictionary<Tree, TreeDataInTransaction> _treesInfo = new Dictionary<Tree, TreeDataInTransaction>();
 		private readonly Dictionary<long, long> _dirtyPages = new Dictionary<long, long>();
+        private readonly Dictionary<long, Page> _dirtyPagesBackend = new Dictionary<long, Page>();
 		private readonly List<long> _freedPages = new List<long>();
 		private readonly HashSet<PagerState> _pagerStates = new HashSet<PagerState>();
 		private readonly UnmanagedBits _freeSpaceBuffer;
@@ -105,13 +106,21 @@ namespace Voron.Impl
 			Page page;
 			if (_dirtyPages.TryGetValue(p, out dirtyPageNum))
 			{
-				page = c.GetPage(dirtyPageNum) ?? _pager.Get(this, dirtyPageNum);
-				page.Dirty = true;
-				UpdateParentPageNumber(parent, page.PageNumber);
-				return page;
+                page = c.GetPage(dirtyPageNum);
+			    
+                if (page == null)
+			        _dirtyPagesBackend.TryGetValue(dirtyPageNum, out page);
+
+				if(page == null)
+                    page = _pager.Get(this, dirtyPageNum);
+				
+                page.Dirty = true;
+				
+                UpdateParentPageNumber(parent, page.PageNumber);
+				
+                return page;
 			}
 			var newPage = AllocatePage(1);
-			newPage.Dirty = true;
 			var newPageNum = newPage.PageNumber;
 			page = c.GetPage(p) ?? _pager.Get(this, p);
 			NativeMethods.memcpy(newPage.Base, page.Base, _pager.PageSize);
@@ -144,7 +153,7 @@ namespace Voron.Impl
 			return _pager.Get(this, n);
 		}
 
-		private Page TryAllocateFromFreeSpace(int numberOfPages)
+		private long? TryAllocateFromFreeSpace(int numberOfPages)
 		{
 			if (_freeSpaceBuffer == null)
 				return null;
@@ -154,26 +163,28 @@ namespace Voron.Impl
 			if (page == -1)
 				return null;
 
-			var newPage = _pager.Get(this, page);
-			newPage.PageNumber = page;
-			return newPage;
+		    return page;
 		}
 
-		public Page AllocatePage(int numberOfPages)
+		public unsafe Page AllocatePage(int numberOfPages)
 		{
-			Page page = TryAllocateFromFreeSpace(numberOfPages);
-			if (page == null) // allocate from end of file
+			var pageNum = TryAllocateFromFreeSpace(numberOfPages);
+			if (pageNum == null) // allocate from end of file
 			{
-				if (numberOfPages > 1)
-					_pager.EnsureContinuous(this, NextPageNumber, numberOfPages);
-				page = _pager.Get(this, NextPageNumber);
-				page.PageNumber = NextPageNumber;
+				_pager.EnsureContinuous(this, NextPageNumber, numberOfPages);
+			    pageNum = NextPageNumber;
 				NextPageNumber += numberOfPages;
 			}
-			page.Lower = (ushort)Constants.PageHeaderSize;
-			page.Upper = (ushort)_pager.PageSize;
-			page.Dirty = true;
-			_dirtyPages[page.PageNumber] = page.PageNumber;
+		    var ptr = Environment.Heap.Allocate(numberOfPages*Pager.PageSize);
+		    var page = new Page(ptr, Pager.PageMaxSpace)
+		        {
+		            PageNumber = pageNum.Value,
+		            Lower = (ushort) Constants.PageHeaderSize,
+		            Upper = (ushort) _pager.PageSize,
+		            Dirty = true
+		        };
+		    _dirtyPages[page.PageNumber] = page.PageNumber;
+		    _dirtyPagesBackend[page.PageNumber] = page;
 			return page;
 		}
 
@@ -324,9 +335,15 @@ namespace Voron.Impl
 			return c;
 		}
 
-		public void FreePage(long pageNumber)
+		public unsafe void FreePage(long pageNumber)
 		{
 			_dirtyPages.Remove(pageNumber);
+		    Page page;
+		    if (_dirtyPagesBackend.TryGetValue(pageNumber, out page))
+		    {
+		        _dirtyPagesBackend.Remove(pageNumber);
+		        Environment.Heap.Free(page.Base);
+		    }
 #if DEBUG
 			Debug.Assert(pageNumber >= 2 && pageNumber <= _pager.NumberOfAllocatedPages);
 			Debug.Assert(_freedPages.Contains(pageNumber) == false);

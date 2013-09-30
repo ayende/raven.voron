@@ -28,5 +28,6 @@ namespace Voron.Impl
         PagerState TransactionBegan();
 
         void EnsureContinuous(Transaction tx, long requestedPageNumber, int pageCount);
+        void Write(Page page);
     }
 }

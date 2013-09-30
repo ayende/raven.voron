@@ -42,7 +42,21 @@ namespace Voron.Impl
 		}
 
 
-		public override void Dispose()
+	    public override unsafe void Write(Page page)
+	    {
+	        throw new NotImplementedException();
+            if (page.IsOverflow)
+            {
+                // copy all overflow pages
+
+            }
+            else
+            {
+                // copy just this page
+            }
+	    }
+
+	    public override void Dispose()
 		{
             base.Dispose();
 			PagerState.Release();

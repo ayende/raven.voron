@@ -31,6 +31,8 @@ namespace Voron
 
         public TransactionMergingWriter Writer { get; private set; }
 
+        private Heap _heap;
+
         public SnapshotReader CreateSnapshot()
         {
             return new SnapshotReader(NewTransaction(TransactionFlags.Read));
@@ -43,7 +45,7 @@ namespace Voron
 				_pager = pager;
 				_ownsPager = ownsPager;
 				_sliceComparer = NativeMethods.memcmp;
-
+                _heap = new Heap();
 				FreeSpaceHandling = new BinaryFreeSpaceStrategy(n => new IntPtr(_pager.AcquirePagePointer(n)));
 
 				Setup(pager);
@@ -206,11 +208,19 @@ namespace Voron
 				activeTransaction.Value.Dispose();
 			}
 
+            if(_heap != null)
+                _heap.Dispose();
+
 			if (_ownsPager)
 				_pager.Dispose();
 		}
 
-		private void WriteEmptyHeaderPage(Page pg)
+        public Heap Heap
+        {
+            get { return _heap; }
+        }
+
+        private void WriteEmptyHeaderPage(Page pg)
 		{
 			var fileHeader = ((FileHeader*)pg.Base);
 			fileHeader->MagicMarker = Constants.MagicMarker;

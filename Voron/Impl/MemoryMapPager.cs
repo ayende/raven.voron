@@ -166,7 +166,13 @@ namespace Voron.Impl
 			FlushViewOfFile(PagerState.Base + start, new IntPtr(numberOfBytesToFlush));
 		}
 
-		public override void Dispose()
+	    public override unsafe void Write(Page page)
+	    {
+            // write use WriteFile...
+	        throw new NotImplementedException();
+	    }
+
+	    public override void Dispose()
 		{
             base.Dispose();
 			if (PagerState != null)
