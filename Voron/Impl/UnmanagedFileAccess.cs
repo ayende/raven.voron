@@ -14,13 +14,9 @@ namespace Voron.Impl
 {
 	public static class UnmanagedFileAccess
 	{
-		[DllImport("kernel32.dll")]
-		public static extern bool WriteFile(
-			IntPtr hFile,
-			IntPtr lpBuffer,
-			uint nNumberOfBytesToWrite,
-			out uint lpNumberOfBytesWritten,
-			[In] ref NativeOverlapped lpOverlapped);
+		[DllImport("kernel32.dll", SetLastError = true)]
+		public static extern bool WriteFile(IntPtr hFile, IntPtr lpBuffer, uint nNumberOfBytesToWrite,
+		                                    out uint lpNumberOfBytesWritten, [In] ref NativeOverlapped lpOverlapped);
 
 		//[DllImport("kernel32.dll", SetLastError = true)]
 		//public static extern IntPtr CreateFile(

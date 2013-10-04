@@ -1,4 +1,7 @@
 ﻿using System;
+using System.IO;
+using System.Threading;
+using Voron.Impl;
 
 namespace Voron.Tryout
 {
@@ -6,10 +9,23 @@ namespace Voron.Tryout
     {
         private static void Main(string[] args)
         {
-	        for (int i = 0; i < 111; i++)
+	        var filePtr = UnmanagedFileAccess.CreateFile("file.txt", FileAccess.Write, FileShare.None, IntPtr.Zero,
+	                                                     FileMode.OpenOrCreate, FileAttributes.Normal, IntPtr.Zero);
+
+	        uint written;
+			NativeOverlapped n = new NativeOverlapped();
+	        n.OffsetLow = 1024 * 1024 * 2;
+	        unsafe
 	        {
-		        Console.WriteLine("{0} -> {1}", i, Test(i));
+		        var bytes = new byte[] {1, 2, 3};
+		        fixed (byte* p = bytes)
+		        {
+			        UnmanagedFileAccess.WriteFile(filePtr.DangerousGetHandle(), new IntPtr(p), 3, out written, ref n);
+		        }
 	        }
+	        
+			filePtr.Close();
+	        //UnmanagedFileAccess.CloseHandle(filePtr.DangerousGetHandle());
         }
 
 		private static int Test(int i)

@@ -20,9 +20,6 @@ namespace Voron.Impl
         int PageMaxSpace { get; }
         int PageMinSpace { get; }
 
-		void Flush(List<long> sortedPagesToFlush);
-		void Flush(long headerPageId);
-
 	    void Sync();
 
         PagerState TransactionBegan();

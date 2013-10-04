@@ -54,8 +54,6 @@ namespace Voron.Impl
 			return new Page(AcquirePagePointer(n), PageMaxSpace);
         }
 
-        public abstract void Flush(List<long> sortedPagesToFlush);
-        public abstract void Flush(long headerPageId);
         public abstract void Sync();
 
         public virtual PagerState TransactionBegan()

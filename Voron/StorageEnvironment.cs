@@ -246,7 +246,7 @@ namespace Voron
 			fileHeader->Root.RootPageNumber = -1;
 		
 			_dataPager.Write(page);
-			_dataPager.Flush(pageNumber);
+
 			_dataPager.Sync();
 			_heap.Free(ptr);
 		}

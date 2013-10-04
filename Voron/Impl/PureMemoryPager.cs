@@ -63,16 +63,6 @@ namespace Voron.Impl
 			_base = null;
 		}
 
-		public override void Flush(List<long> sortedPagesToFlush)
-		{
-			//nothing to do here
-		}
-
-		public override void Flush(long headerPageId)
-		{
-			// also nothing to do
-		}
-
 		public override void Sync()
 		{
 			// nothing to do here

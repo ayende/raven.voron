@@ -29,7 +29,7 @@ namespace Voron.Tests
         {
             if (File.Exists("test.data"))
                 File.Delete("test.data");
-            _pager = new MemoryMapPager("test.data");
+            _pager = new FilePager("test.data");
         }
 
         protected Stream StreamFor(string val)

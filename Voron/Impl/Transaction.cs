@@ -261,8 +261,6 @@ namespace Voron.Impl
 
 			WriteHeader(_id & 1); // this will cycle between the first and second pages
 
-			_pager.Flush(_id & 1); // and now we flush the metadata as well
-
 			_pager.Sync();
 
 			Committed = true;
