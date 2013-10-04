@@ -22,7 +22,8 @@ namespace Voron
             = new ConcurrentDictionary<string, Tree>(StringComparer.OrdinalIgnoreCase);
 
         private readonly bool _ownsPager;
-        private readonly IVirtualPager _pager;
+        private readonly IVirtualPager _dataPager;
+		private readonly IVirtualPager _logFilePager;
         private readonly SliceComparer _sliceComparer;
 
         private readonly SemaphoreSlim _txWriter = new SemaphoreSlim(1);
@@ -42,11 +43,11 @@ namespace Voron
 		{
 			try
 			{
-				_pager = pager;
+				_dataPager = pager;
 				_ownsPager = ownsPager;
 				_sliceComparer = NativeMethods.memcmp;
                 _heap = new Heap();
-				FreeSpaceHandling = new BinaryFreeSpaceStrategy(n => new IntPtr(_pager.AcquirePagePointer(n)));
+				FreeSpaceHandling = new BinaryFreeSpaceStrategy(n => new IntPtr(_dataPager.AcquirePagePointer(n)));
 
 				Setup(pager);
 				Root.Name = "Root";
@@ -64,24 +65,24 @@ namespace Voron
         {
             if (pager.NumberOfAllocatedPages == 0)
             {
-                WriteEmptyHeaderPage(_pager.Get(null, 0));
-                WriteEmptyHeaderPage(_pager.Get(null, 1));
+                WriteEmptyHeaderPage(0);
+                WriteEmptyHeaderPage(1);
 
 				var freeSpaceHeader = new FreeSpaceHeader
 					{
 						FirstBufferPageNumber = 2,
 						SecondBufferPageNumber = 3,
 						NumberOfPagesTakenForTracking = 1,
-						NumberOfTrackedPages = _pager.NumberOfAllocatedPages,
-						PageSize = _pager.PageSize,
-						Checksum = Crc.ForEmptyInitialBuffer(_pager.PageSize)
+						NumberOfTrackedPages = _dataPager.NumberOfAllocatedPages,
+						PageSize = _dataPager.PageSize,
+						Checksum = Crc.ForEmptyInitialBuffer(_dataPager.PageSize)
 					};
 
 				FreeSpaceHandling.Initialize(&freeSpaceHeader, true);
 
 				NextPageNumber = 4;
 
-				using (var tx = new Transaction(_pager, this, _transactionsCounter + 1, TransactionFlags.ReadWrite, null))
+				using (var tx = new Transaction(_dataPager, this, _transactionsCounter + 1, TransactionFlags.ReadWrite, null))
 				{
 					var root = Tree.Create(tx, _sliceComparer);
 
@@ -101,7 +102,7 @@ namespace Voron
 			FileHeader* entry = FindLatestFileHeadeEntry();
 			NextPageNumber = entry->LastPageNumber + 1;
 			_transactionsCounter = entry->TransactionId + 1;
-			using (var tx = new Transaction(_pager, this, _transactionsCounter + 1, TransactionFlags.ReadWrite, null))
+			using (var tx = new Transaction(_dataPager, this, _transactionsCounter + 1, TransactionFlags.ReadWrite, null))
 			{
 				var root = Tree.Open(tx, _sliceComparer, &entry->Root);
 
@@ -132,7 +133,7 @@ namespace Voron
 
         public int PageSize
         {
-            get { return _pager.PageSize; }
+            get { return _dataPager.PageSize; }
         }
 
 		public BinaryFreeSpaceStrategy FreeSpaceHandling { get; set; }
@@ -212,7 +213,7 @@ namespace Voron
                 _heap.Dispose();
 
 			if (_ownsPager)
-				_pager.Dispose();
+				_dataPager.Dispose();
 		}
 
         public Heap Heap
@@ -220,9 +221,18 @@ namespace Voron
             get { return _heap; }
         }
 
-        private void WriteEmptyHeaderPage(Page pg)
+        private void WriteEmptyHeaderPage(long pageNumber)
 		{
-			var fileHeader = ((FileHeader*)pg.Base);
+	        var ptr = _heap.Allocate(_dataPager.PageSize);
+
+			var page = new Page(ptr, _dataPager.PageMaxSpace)
+			{
+				PageNumber = pageNumber,
+				Lower = (ushort)Constants.PageHeaderSize,
+				Upper = (ushort)_dataPager.PageSize,
+			};
+
+			var fileHeader = ((FileHeader*)page.Base + Constants.PageHeaderSize);
 			fileHeader->MagicMarker = Constants.MagicMarker;
 			fileHeader->Version = Constants.CurrentVersion;
 			fileHeader->TransactionId = 0;
@@ -234,12 +244,17 @@ namespace Voron
 			fileHeader->FreeSpace.PageSize = -1;
 			fileHeader->FreeSpace.Checksum = 0;
 			fileHeader->Root.RootPageNumber = -1;
+		
+			_dataPager.Write(page);
+			_dataPager.Flush(pageNumber);
+			_dataPager.Sync();
+			_heap.Free(ptr);
 		}
 
         private FileHeader* FindLatestFileHeadeEntry()
         {
-            Page fst = _pager.Get(null, 0);
-            Page snd = _pager.Get(null, 1);
+            Page fst = _dataPager.Get(null, 0);
+            Page snd = _dataPager.Get(null, 1);
 
             FileHeader* e1 = GetFileHeaderFrom(fst);
             FileHeader* e2 = GetFileHeaderFrom(snd);
@@ -254,7 +269,7 @@ namespace Voron
 
         private FileHeader* GetFileHeaderFrom(Page p)
         {
-            var fileHeader = ((FileHeader*)p.Base);
+			var fileHeader = ((FileHeader*)p.Base + Constants.PageHeaderSize);
             if (fileHeader->MagicMarker != Constants.MagicMarker)
                 throw new InvalidDataException(
                     "The header page did not start with the magic marker, probably not a db file");
@@ -262,7 +277,7 @@ namespace Voron
                 throw new InvalidDataException("This is a db file for version " + fileHeader->Version +
                                                ", which is not compatible with the current version " +
                                                Constants.CurrentVersion);
-            if (fileHeader->LastPageNumber >= _pager.NumberOfAllocatedPages)
+            if (fileHeader->LastPageNumber >= _dataPager.NumberOfAllocatedPages)
                 throw new InvalidDataException("The last page number is beyond the number of allocated pages");
             if (fileHeader->TransactionId < 0)
                 throw new InvalidDataException("The transaction number cannot be negative");
@@ -285,9 +300,9 @@ namespace Voron
 
 					freeSpaceBuffer = FreeSpaceHandling.GetBufferForNewTransaction(txId);
 				}
-				var tx = new Transaction(_pager, this, txId, flags, freeSpaceBuffer);
+				var tx = new Transaction(_dataPager, this, txId, flags, freeSpaceBuffer);
 				_activeTransactions.TryAdd(txId, tx);
-				var state = _pager.TransactionBegan();
+				var state = _dataPager.TransactionBegan();
 				tx.AddPagerState(state);
 
 				if (flags == TransactionFlags.ReadWrite)
@@ -348,14 +363,14 @@ namespace Voron
             Transaction txr = null;
             try
             {
-                var buffer = new byte[_pager.PageSize*16];
+                var buffer = new byte[_dataPager.PageSize*16];
                 long nextPageNumber;
                 using (var txw = NewTransaction(TransactionFlags.ReadWrite)) // so we can snapshot the headers safely
                 {
                     txr = NewTransaction(TransactionFlags.Read); // now have snapshot view
                     nextPageNumber = txw.NextPageNumber;
-                    var firstPage = _pager.Get(txw, 0);
-                    using (var headerStream = new UnmanagedMemoryStream(firstPage.Base, _pager.PageSize*2))
+                    var firstPage = _dataPager.Get(txw, 0);
+                    using (var headerStream = new UnmanagedMemoryStream(firstPage.Base, _dataPager.PageSize*2))
                     {
                         while (headerStream.Position < headerStream.Length)
                         {
@@ -366,9 +381,9 @@ namespace Voron
                     //txw.Commit(); intentionally not committing
                 }
                 // now can copy everything else
-                var firtDataPage = _pager.Get(txr, 2);
+                var firtDataPage = _dataPager.Get(txr, 2);
                 using (
-                    var headerStream = new UnmanagedMemoryStream(firtDataPage.Base, _pager.PageSize*(nextPageNumber - 2))
+                    var headerStream = new UnmanagedMemoryStream(firtDataPage.Base, _dataPager.PageSize*(nextPageNumber - 2))
                     )
                 {
                     while (headerStream.Position < headerStream.Length)
@@ -411,7 +426,7 @@ namespace Voron
 					FreePagesOverhead = FreeSpaceHandling.Info.GetBuffersPages().Count,
 					RootPages = Root.State.PageCount,
 					HeaderPages = 2,
-					UnallocatedPagesAtEndOfFile = _pager.NumberOfAllocatedPages - NextPageNumber
+					UnallocatedPagesAtEndOfFile = _dataPager.NumberOfAllocatedPages - NextPageNumber
 				};
 		}
     }

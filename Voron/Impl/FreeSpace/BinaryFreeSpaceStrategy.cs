@@ -115,34 +115,35 @@ namespace Voron.Impl.FreeSpace
 
 		public unsafe void Initialize(FreeSpaceHeader* header, bool clearBuffers = false)
 		{
-			_bits[0] = new UnmanagedBits((byte*) _acquirePagePointer(header->FirstBufferPageNumber).ToPointer(),
-			                            header->FirstBufferPageNumber, header->NumberOfPagesTakenForTracking*header->PageSize,
-			                            header->NumberOfTrackedPages, header->PageSize);
+			//TODO
+			//_bits[0] = new UnmanagedBits((byte*) _acquirePagePointer(header->FirstBufferPageNumber).ToPointer(),
+			//							header->FirstBufferPageNumber, header->NumberOfPagesTakenForTracking*header->PageSize,
+			//							header->NumberOfTrackedPages, header->PageSize);
 			
 
-			_bits[1] = new UnmanagedBits((byte*) _acquirePagePointer(header->SecondBufferPageNumber).ToPointer(),
-			                            header->SecondBufferPageNumber, header->NumberOfPagesTakenForTracking*header->PageSize,
-			                            header->NumberOfTrackedPages, header->PageSize);
-			if (clearBuffers)
-			{
-				_bits[0].Clear();
-				_bits[1].Clear();
-			}
-			else
-			{
-				_bits[1].RefreshNumberOfFreePages();
-				_bits[0].RefreshNumberOfFreePages();
-			}
+			//_bits[1] = new UnmanagedBits((byte*) _acquirePagePointer(header->SecondBufferPageNumber).ToPointer(),
+			//							header->SecondBufferPageNumber, header->NumberOfPagesTakenForTracking*header->PageSize,
+			//							header->NumberOfTrackedPages, header->PageSize);
+			//if (clearBuffers)
+			//{
+			//	_bits[0].Clear();
+			//	_bits[1].Clear();
+			//}
+			//else
+			//{
+			//	_bits[1].RefreshNumberOfFreePages();
+			//	_bits[0].RefreshNumberOfFreePages();
+			//}
 			
-			_state = new FreeSpaceHeader
-				{
-					FirstBufferPageNumber = header->FirstBufferPageNumber,
-					SecondBufferPageNumber = header->SecondBufferPageNumber,
-					NumberOfPagesTakenForTracking = header->NumberOfPagesTakenForTracking,
-					NumberOfTrackedPages = header->NumberOfTrackedPages,
-					PageSize = header->PageSize,
-					Checksum = header->Checksum
-				};
+			//_state = new FreeSpaceHeader
+			//	{
+			//		FirstBufferPageNumber = header->FirstBufferPageNumber,
+			//		SecondBufferPageNumber = header->SecondBufferPageNumber,
+			//		NumberOfPagesTakenForTracking = header->NumberOfPagesTakenForTracking,
+			//		NumberOfTrackedPages = header->NumberOfTrackedPages,
+			//		PageSize = header->PageSize,
+			//		Checksum = header->Checksum
+			//	};
 		}
 
 		public unsafe void UpdateBufferPointers()
@@ -153,26 +154,29 @@ namespace Voron.Impl.FreeSpace
 
 		public void RecoverBuffers()
 		{
-			var firstBufferMatch = _bits[0].CalculateChecksum() == _state.Checksum;
-			var secondBufferMatch = _bits[1].CalculateChecksum() == _state.Checksum;
+			//TODO
+			//var firstBufferMatch = _bits[0].CalculateChecksum() == _state.Checksum;
+			//var secondBufferMatch = _bits[1].CalculateChecksum() == _state.Checksum;
 
-			if(firstBufferMatch && secondBufferMatch)
-				return;
+			//if(firstBufferMatch && secondBufferMatch)
+			//	return;
 
-			if(firstBufferMatch == false && secondBufferMatch == false)
-				throw new InvalidDataException(
-						"Checksum mismatch. Both buffers are in invalid state. Valid state of the free pages buffer cannot be restored during buffers recovery"); // should never happen
+			//if(firstBufferMatch == false && secondBufferMatch == false)
+			//	throw new InvalidDataException(
+			//			"Checksum mismatch. Both buffers are in invalid state. Valid state of the free pages buffer cannot be restored during buffers recovery"); // should never happen
 
-			var validBufferIndex = firstBufferMatch ? 0 : 1;
+			//var validBufferIndex = firstBufferMatch ? 0 : 1;
 
-			var validBuffer = _bits[validBufferIndex];
-			var dirtyBuffer = _bits[1 - validBufferIndex];
+			//var validBuffer = _bits[validBufferIndex];
+			//var dirtyBuffer = _bits[1 - validBufferIndex];
 
-			validBuffer.CopyAllTo(dirtyBuffer);
+			//validBuffer.CopyAllTo(dirtyBuffer);
 		}
 
 		public UnmanagedBits GetBufferForNewTransaction(long txId)
 		{
+			return null; //TODO
+
 			var indexOfBuffer = txId & 1;
 
 			var next = _bits[indexOfBuffer];

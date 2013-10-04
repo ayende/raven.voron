@@ -4,6 +4,8 @@ using System.IO;
 using System.IO.MemoryMappedFiles;
 using System.Runtime.InteropServices;
 using System.Linq;
+using System.Threading;
+using Microsoft.Win32.SafeHandles;
 using Voron.Trees;
 
 namespace Voron.Impl
@@ -13,8 +15,9 @@ namespace Voron.Impl
 		private readonly FlushMode _flushMode;
 		private readonly FileStream _fileStream;
 	    private int numberOfFlushes;
+		private SafeFileHandle _fileHandle;
 
-	    [DllImport("kernel32.dll", SetLastError = true)]
+		[DllImport("kernel32.dll", SetLastError = true)]
 		[return: MarshalAs(UnmanagedType.Bool)]
 		extern static bool FlushViewOfFile(byte* lpBaseAddress, IntPtr dwNumberOfBytesToFlush);
 
@@ -24,6 +27,13 @@ namespace Voron.Impl
 			var fileInfo = new FileInfo(file);
 			var noData = fileInfo.Exists == false || fileInfo.Length == 0;
 			_fileStream = fileInfo.Open(FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.Read);
+			//_fileHandle = UnmanagedFileAccess.CreateFile(file, FileAccess.Write, FileShare.ReadWrite, IntPtr.Zero,
+			//											 FileMode.OpenOrCreate, FileAttributes.Normal, IntPtr.Zero);
+			//_fileStream = new FileStream(_fileHandle, FileAccess.ReadWrite);
+			_fileHandle = _fileStream.SafeFileHandle;
+			//SafeFileHandle a = new SafeFileHandle();
+			//a.DangerousGetHandle()
+
 			if (noData)
 			{
 				NumberOfAllocatedPages = 0;
@@ -51,6 +61,13 @@ namespace Voron.Impl
 
 			// need to allocate memory again
 			_fileStream.SetLength(newLength);
+
+			int lo = (int)(newLength & 0xffffffff);
+			int hi = (int)(newLength >> 32);
+
+			//UnmanagedFileAccess.SetFilePointer(_fileHandle, lo, out hi, UnmanagedFileAccess.EMoveMethod.Begin);
+			//UnmanagedFileAccess.SetEndOfFile(_fileHandle);
+
 			PagerState.Release(); // when the last transaction using this is over, will dispose it
 			PagerState newPager = CreateNewPagerState();
 
@@ -68,10 +85,11 @@ namespace Voron.Impl
 		{
 			var mmf = MemoryMappedFile.CreateFromFile(_fileStream, Guid.NewGuid().ToString(), _fileStream.Length,
 													  MemoryMappedFileAccess.Read, null, HandleInheritability.None, true);
+			
 			MemoryMappedViewAccessor accessor;
 		    try
 		    {
-		        accessor = mmf.CreateViewAccessor();
+			    accessor = mmf.CreateViewAccessor(0, _fileStream.Length, MemoryMappedFileAccess.Read);
 		    }
 		    catch (Exception)
 		    {
@@ -168,8 +186,23 @@ namespace Voron.Impl
 
 	    public override unsafe void Write(Page page)
 	    {
-            // write use WriteFile...
-	        throw new NotImplementedException();
+			uint written;
+			var nativeOverlapped = new NativeOverlapped();
+			var pos = page.PageNumber * PageSize;
+			nativeOverlapped.OffsetLow = (int)(pos & 0xffffffff);
+			nativeOverlapped.OffsetHigh = (int)(pos >> 16 >> 16);
+			var filePtr = _fileHandle.DangerousGetHandle();
+
+			if (page.IsOverflow)
+			{
+				// copy all overflow pages
+				UnmanagedFileAccess.WriteFile(filePtr, new IntPtr(page.Base), (uint)page.OverflowSize, out written, ref nativeOverlapped);
+			}
+			else
+			{
+				// copy just this page
+				UnmanagedFileAccess.WriteFile(filePtr, new IntPtr(page.Base), (uint) PageSize, out written, ref nativeOverlapped);
+			}
 	    }
 
 	    public override void Dispose()

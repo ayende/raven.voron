@@ -150,6 +150,11 @@ namespace Voron.Impl
 			long dirtyPage;
 			if (_dirtyPages.TryGetValue(n, out dirtyPage))
 				n = dirtyPage;
+
+			Page dirtyInTransaction;
+			if(_dirtyPagesBackend.TryGetValue(n, out dirtyInTransaction))
+				return dirtyInTransaction;
+
 			return _pager.Get(this, n);
 		}
 
@@ -254,7 +259,7 @@ namespace Voron.Impl
 		        _pager.Write(sortedPage);
 		    }
 
-			WriteHeader(_pager.Get(this, _id & 1)); // this will cycle between the first and second pages
+			WriteHeader(_id & 1); // this will cycle between the first and second pages
 
 			_pager.Flush(_id & 1); // and now we flush the metadata as well
 
@@ -288,13 +293,29 @@ namespace Voron.Impl
 			}
 		}
 
-		private unsafe void WriteHeader(Page pg)
+		private unsafe void WriteHeader(long pageNumber)
 		{
-			var fileHeader = (FileHeader*)pg.Base;
+			var ptr = _env.Heap.Allocate(_pager.PageSize);
+
+			var page = new Page(ptr, _pager.PageMaxSpace)
+			{
+				PageNumber = pageNumber,
+				Lower = (ushort)Constants.PageHeaderSize,
+				Upper = (ushort)_pager.PageSize,
+			};
+
+			var fileHeader = ((FileHeader*)page.Base + Constants.PageHeaderSize);
+
+			fileHeader->MagicMarker = Constants.MagicMarker;
+			fileHeader->Version = Constants.CurrentVersion;
+
 			fileHeader->TransactionId = _id;
 			fileHeader->LastPageNumber = NextPageNumber - 1;
 			_env.FreeSpaceHandling.CopyStateTo(&fileHeader->FreeSpace);
 			_env.Root.State.CopyTo(&fileHeader->Root);
+
+			_pager.Write(page);
+			_env.Heap.Free(ptr);
 		}
 
 		public void Dispose()
@@ -333,12 +354,13 @@ namespace Voron.Impl
 		public unsafe void FreePage(long pageNumber)
 		{
 			_dirtyPages.Remove(pageNumber);
-		    Page page;
-		    if (_dirtyPagesBackend.TryGetValue(pageNumber, out page))
-		    {
-		        _dirtyPagesBackend.Remove(pageNumber);
-		        Environment.Heap.Free(page.Base);
-		    }
+			//TODO arek - temporary do not remove because it causes some problems in later use of this freed pages e.g.: getting page number
+			//Page page;
+			//if (_dirtyPagesBackend.TryGetValue(pageNumber, out page))
+			//{
+			//	_dirtyPagesBackend.Remove(pageNumber);
+			//	Environment.Heap.Free(page.Base);
+			//}
 #if DEBUG
 			Debug.Assert(pageNumber >= 2 && pageNumber <= _pager.NumberOfAllocatedPages);
 			Debug.Assert(_freedPages.Contains(pageNumber) == false);

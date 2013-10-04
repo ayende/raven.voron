@@ -35,6 +35,11 @@ namespace Voron.Impl.FreeSpace
 
 		private long _lastSearchPosition = -1;
 
+		public UnmanagedBits()
+		{
+			//TODO remove this ctor later
+		}
+
 		public UnmanagedBits(byte* ptr, long startPageNumber, long sizeInBytes, long numberOfPages, int pageSize)
 		{
 			_sizeInBytes = sizeInBytes;
@@ -333,6 +338,8 @@ namespace Voron.Impl.FreeSpace
 
 		public long Find(long numberOfFreePages)
 		{
+			return -1; // TODO 
+
 			var result = GetContinuousRangeOfFreePages(numberOfFreePages);
 
 			if (result != -1)

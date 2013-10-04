@@ -113,55 +113,55 @@ namespace Voron.Impl
 
 				return;
 			}
+			//TODO arek
+			//var requiredSize = UnmanagedBits.CalculateSizeInBytesForAllocation(2 * NumberOfAllocatedPages, PageSize);
+			//var requiredPages = (long)Math.Ceiling((float)requiredSize / PageSize);
+			//// we always allocate twice as much as we actually need, because we don't 
 
-			var requiredSize = UnmanagedBits.CalculateSizeInBytesForAllocation(2 * NumberOfAllocatedPages, PageSize);
-			var requiredPages = (long)Math.Ceiling((float)requiredSize / PageSize);
-			// we always allocate twice as much as we actually need, because we don't 
+			//// we request twice because it would likely be easier to find two smaller pieces than one big piece
+			//var firstBufferPageStart = tx.FreeSpaceBuffer.Find(requiredPages);
+			//var secondBufferPageStart = tx.FreeSpaceBuffer.Find(requiredPages);
 
-			// we request twice because it would likely be easier to find two smaller pieces than one big piece
-			var firstBufferPageStart = tx.FreeSpaceBuffer.Find(requiredPages);
-			var secondBufferPageStart = tx.FreeSpaceBuffer.Find(requiredPages);
+			//// this is a bit of a hack, because we modify the NextPageNumber just before
+			//// the tx is going to modify it, too.
+			//// However, this is currently safe because the tx will just add to its current value
+			//// so we can do that. However, note that we need to skip the range that it is _currently_
+			//// allocating
+			//if (firstBufferPageStart == -1)
+			//{
+			//	firstBufferPageStart = tx.NextPageNumber;
+			//	tx.NextPageNumber += requiredPages;
+			//}
 
-			// this is a bit of a hack, because we modify the NextPageNumber just before
-			// the tx is going to modify it, too.
-			// However, this is currently safe because the tx will just add to its current value
-			// so we can do that. However, note that we need to skip the range that it is _currently_
-			// allocating
-			if (firstBufferPageStart == -1)
-			{
-				firstBufferPageStart = tx.NextPageNumber;
-				tx.NextPageNumber += requiredPages;
-			}
+			//if (secondBufferPageStart == -1)
+			//{
+			//	secondBufferPageStart = tx.NextPageNumber;
+			//	tx.NextPageNumber += requiredPages;
+			//}
 
-			if (secondBufferPageStart == -1)
-			{
-				secondBufferPageStart = tx.NextPageNumber;
-				tx.NextPageNumber += requiredPages;
-			}
+			//if (pageCount + tx.NextPageNumber >= NumberOfAllocatedPages)
+			//	throw new InvalidOperationException(
+			//		"BUG, cannot find space for free space during file growth because the required size was too big even after the re-growth");
 
-			if (pageCount + tx.NextPageNumber >= NumberOfAllocatedPages)
-				throw new InvalidOperationException(
-					"BUG, cannot find space for free space during file growth because the required size was too big even after the re-growth");
+			//tx.Environment.FreeSpaceHandling.MoveTo(firstBufferPageStart, secondBufferPageStart, NumberOfAllocatedPages,
+			//										requiredPages, PageSize);
 
-			tx.Environment.FreeSpaceHandling.MoveTo(firstBufferPageStart, secondBufferPageStart, NumberOfAllocatedPages,
-			                                        requiredPages, PageSize);
+			//// after moving buffers to new pages make sure that they will be flushed
+			//var buffersPages = tx.Environment.FreeSpaceHandling.Info.GetBuffersPages();
+			//buffersPages.Sort();
 
-			// after moving buffers to new pages make sure that they will be flushed
-			var buffersPages = tx.Environment.FreeSpaceHandling.Info.GetBuffersPages();
-			buffersPages.Sort();
+			//Flush(buffersPages);
 
-			Flush(buffersPages);
+			//// and both file headers will contain modified free space handling information
+			//var fileHeader = (FileHeader*)Get(tx, 0).Base + Constants.PageHeaderSize;
+			//tx.Environment.FreeSpaceHandling.CopyStateTo(&fileHeader->FreeSpace);
 
-			// and both file headers will contain modified free space handling information
-			var fileHeader = (FileHeader*)Get(tx, 0).Base;
-			tx.Environment.FreeSpaceHandling.CopyStateTo(&fileHeader->FreeSpace);
+			//fileHeader = (FileHeader*)Get(tx, 1).Base + Constants.PageHeaderSize;
+			//tx.Environment.FreeSpaceHandling.CopyStateTo(&fileHeader->FreeSpace);
 
-			fileHeader = (FileHeader*)Get(tx, 1).Base;
-			tx.Environment.FreeSpaceHandling.CopyStateTo(&fileHeader->FreeSpace);
+			//Flush(new List<long> {0, 1});
 
-			Flush(new List<long> {0, 1});
-
-			Sync();
+			//Sync();
 		}
 
 	    public virtual void Dispose()

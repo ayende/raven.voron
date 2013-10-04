@@ -279,6 +279,8 @@ namespace Voron.Trees
 			{
 				var overflowPage = tx.GetReadOnlyPage(node->PageNumber);
 				var numberOfPages = GetNumberOfOverflowPages(tx, overflowPage.OverflowSize);
+				
+				//TODO arek, might be a reason to do int in a reversed order
 				for (int i = 0; i < numberOfPages; i++)
 				{
 					tx.FreePage(overflowPage.PageNumber + i);

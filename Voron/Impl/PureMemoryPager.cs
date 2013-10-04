@@ -44,15 +44,15 @@ namespace Voron.Impl
 
 	    public override unsafe void Write(Page page)
 	    {
-	        throw new NotImplementedException();
             if (page.IsOverflow)
             {
                 // copy all overflow pages
-
+	            NativeMethods.memcpy(AcquirePagePointer(page.PageNumber), page.Base, page.OverflowSize);
             }
             else
             {
                 // copy just this page
+	            NativeMethods.memcpy(AcquirePagePointer(page.PageNumber), page.Base, PageSize);
             }
 	    }
 
