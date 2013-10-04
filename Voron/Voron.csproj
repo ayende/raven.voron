@@ -60,7 +60,7 @@
     <Compile Include="Impl\PureMemoryPager.cs" />
     <Compile Include="Impl\SnapshotReader.cs" />
     <Compile Include="Impl\TransactionMergingWriter.cs" />
-    <Compile Include="Impl\UnmanagedFileAccess.cs" />
+    <Compile Include="Impl\NativeFileMethods.cs" />
     <Compile Include="Impl\WriteBatch.cs" />
     <Compile Include="ReadResult.cs" />
     <Compile Include="TransactionFlags.cs" />

@@ -11,16 +11,30 @@ namespace Voron.Impl
 	{
 		private readonly FlushMode _flushMode;
 		private readonly FileStream _fileStream;
-		private IntPtr _fileHandle;
+		private readonly IntPtr _fileHandle;
 
 		public FilePager(string file, FlushMode flushMode = FlushMode.Full)
 		{
 			_flushMode = flushMode;
 			var fileInfo = new FileInfo(file);
 			var noData = fileInfo.Exists == false || fileInfo.Length == 0;
-			_fileStream = fileInfo.Open(FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.Read);
 
-			_fileHandle = _fileStream.SafeFileHandle.DangerousGetHandle();
+			var safeHandle = NativeFileMethods.CreateFile(file,
+			                                              NativeFileAccess.GenericRead | NativeFileAccess.GenericWrite,
+			                                              NativeFileShare.Read, IntPtr.Zero,
+			                                              NativeFileCreationDisposition.OpenAlways,
+														  NativeFileAttributes.Normal, //TODO here we could pass Write_Through or (and) NoBuffering
+														  IntPtr.Zero);
+
+			if (safeHandle.IsInvalid)
+			{
+				throw new IOException("Unable to create or open file + '" + file + "'. Win32 Error Code " +
+				                      Marshal.GetLastWin32Error());
+				//if get windows error code 5 this means access denied. You must try to run the program as admin privileges.
+			}   
+
+			_fileHandle = safeHandle.DangerousGetHandle();
+			_fileStream = new FileStream(safeHandle, FileAccess.Read);
 
 			if (noData)
 			{
@@ -48,13 +62,7 @@ namespace Voron.Impl
 		        return;
 
 			// need to allocate memory again
-			_fileStream.SetLength(newLength);
-
-			int lo = (int)(newLength & 0xffffffff);
-			int hi = (int)(newLength >> 32);
-
-			//UnmanagedFileAccess.SetFilePointer(_fileHandle, lo, out hi, UnmanagedFileAccess.EMoveMethod.Begin);
-			//UnmanagedFileAccess.SetEndOfFile(_fileHandle);
+			NativeFileMethods.SetFileLength(_fileHandle, newLength);
 
 			PagerState.Release(); // when the last transaction using this is over, will dispose it
 			PagerState newPager = CreateNewPagerState();
@@ -73,7 +81,7 @@ namespace Voron.Impl
 		{
 			var mmf = MemoryMappedFile.CreateFromFile(_fileStream, Guid.NewGuid().ToString(), _fileStream.Length,
 													  MemoryMappedFileAccess.Read, null, HandleInheritability.None, true);
-			
+
 			MemoryMappedViewAccessor accessor;
 		    try
 		    {
@@ -100,7 +108,7 @@ namespace Voron.Impl
 		public override void Sync()
 		{
 			if (_flushMode == FlushMode.Full)
-				_fileStream.Flush(true);
+				NativeFileMethods.FlushFileBuffers(_fileHandle);
 		}
 
 	    public override void Write(Page page)
@@ -111,13 +119,13 @@ namespace Voron.Impl
 		    var nativeOverlapped = new NativeOverlapped()
 			    {
 				    OffsetLow = (int) (position & 0xffffffff),
-				    OffsetHigh = (int) (position >> 16 >> 16)
+				    OffsetHigh = (int) (position >> 32)
 			    };
 
 		    var toWrite = page.IsOverflow ? (uint) page.OverflowSize : (uint) PageSize;
 
 
-		    if (UnmanagedFileAccess.WriteFile(_fileHandle, new IntPtr(page.Base), toWrite, out written, ref nativeOverlapped) == false)
+		    if (NativeFileMethods.WriteFile(_fileHandle, new IntPtr(page.Base), toWrite, out written, ref nativeOverlapped) == false)
 		    {
 			    var win32Error = Marshal.GetLastWin32Error();
 			    throw new IOException("Writing to file failed. Error code: " + win32Error);
@@ -132,6 +140,7 @@ namespace Voron.Impl
 				PagerState.Release();
 				PagerState = null;
 			}
+		    NativeFileMethods.CloseHandle(_fileHandle);
 			_fileStream.Dispose();
 		}
 	}
