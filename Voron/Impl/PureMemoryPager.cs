@@ -42,21 +42,21 @@ namespace Voron.Impl
 		}
 
 
-	    public override unsafe void Write(Page page)
+	    public override int Write(Page page)
 	    {
-            if (page.IsOverflow)
-            {
-                // copy all overflow pages
-	            NativeMethods.memcpy(AcquirePagePointer(page.PageNumber), page.Base, page.OverflowSize);
-            }
-            else
-            {
-                // copy just this page
-	            NativeMethods.memcpy(AcquirePagePointer(page.PageNumber), page.Base, PageSize);
-            }
+			var toWrite = page.IsOverflow ? page.OverflowSize : PageSize;
+
+			NativeMethods.memcpy(AcquirePagePointer(page.PageNumber), page.Base, toWrite);
+
+		    return toWrite;
 	    }
 
-	    public override void Dispose()
+		public override unsafe int Write(Page page, long writeToPage)
+		{
+			throw new NotImplementedException();
+		}
+
+		public override void Dispose()
 		{
             base.Dispose();
 			PagerState.Release();
@@ -64,6 +64,11 @@ namespace Voron.Impl
 		}
 
 		public override void Sync()
+		{
+			// nothing to do here
+		}
+
+		public override void Flush(long startPage, long count)
 		{
 			// nothing to do here
 		}

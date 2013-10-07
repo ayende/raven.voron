@@ -8,6 +8,7 @@ using Voron.Debugging;
 using Voron.Impl;
 using Voron.Impl.FileHeaders;
 using Voron.Impl.FreeSpace;
+using Voron.Impl.WriteAheadLog;
 using Voron.Trees;
 using Voron.Util;
 
@@ -33,8 +34,9 @@ namespace Voron
         public TransactionMergingWriter Writer { get; private set; }
 
         private Heap _heap;
+	    private LogFile _log;
 
-        public SnapshotReader CreateSnapshot()
+	    public SnapshotReader CreateSnapshot()
         {
             return new SnapshotReader(NewTransaction(TransactionFlags.Read));
         }
@@ -48,10 +50,11 @@ namespace Voron
 				_sliceComparer = NativeMethods.memcmp;
                 _heap = new Heap();
 				FreeSpaceHandling = new BinaryFreeSpaceStrategy(n => new IntPtr(_dataPager.AcquirePagePointer(n)));
+				_log = new LogFile(new MemoryMapPager("voron.log"));
 
 				Setup(pager);
 				Root.Name = "Root";
-
+				
                 Writer = new TransactionMergingWriter(this);
             }
             catch (Exception)
@@ -82,7 +85,7 @@ namespace Voron
 
 				NextPageNumber = 4;
 
-				using (var tx = new Transaction(_dataPager, this, _transactionsCounter + 1, TransactionFlags.ReadWrite, null))
+				using (var tx = new Transaction(_log, _dataPager, this, _transactionsCounter + 1, TransactionFlags.ReadWrite, null))
 				{
 					var root = Tree.Create(tx, _sliceComparer);
 
@@ -102,7 +105,7 @@ namespace Voron
 			FileHeader* entry = FindLatestFileHeadeEntry();
 			NextPageNumber = entry->LastPageNumber + 1;
 			_transactionsCounter = entry->TransactionId + 1;
-			using (var tx = new Transaction(_dataPager, this, _transactionsCounter + 1, TransactionFlags.ReadWrite, null))
+			using (var tx = new Transaction(_log, _dataPager, this, _transactionsCounter + 1, TransactionFlags.ReadWrite, null))
 			{
 				var root = Tree.Open(tx, _sliceComparer, &entry->Root);
 
@@ -214,6 +217,8 @@ namespace Voron
 
 			if (_ownsPager)
 				_dataPager.Dispose();
+
+			_log.Dispose();
 		}
 
         public Heap Heap
@@ -300,7 +305,7 @@ namespace Voron
 
 					freeSpaceBuffer = FreeSpaceHandling.GetBufferForNewTransaction(txId);
 				}
-				var tx = new Transaction(_dataPager, this, txId, flags, freeSpaceBuffer);
+				var tx = new Transaction(_log, _dataPager, this, txId, flags, freeSpaceBuffer);
 				_activeTransactions.TryAdd(txId, tx);
 				var state = _dataPager.TransactionBegan();
 				tx.AddPagerState(state);

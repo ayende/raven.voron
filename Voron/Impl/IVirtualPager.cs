@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
 using Voron.Trees;
 
 namespace Voron.Impl
@@ -11,6 +10,7 @@ namespace Voron.Impl
 		byte* AcquirePagePointer(long pageNumber);
         Page Get(Transaction tx, long pageNumber, bool errorOnChange = false);
 		void AllocateMorePages(Transaction tx, long newLength);
+	    void Flush(long startPage, long count);
 
         Page TempPage { get; }
 
@@ -25,6 +25,7 @@ namespace Voron.Impl
         PagerState TransactionBegan();
 
         void EnsureContinuous(Transaction tx, long requestedPageNumber, int pageCount);
-        void Write(Page page);
+        int Write(Page page);
+	    int Write(Page page, long writeToPage);
     }
 }

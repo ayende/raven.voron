@@ -1,4 +1,6 @@
 ﻿using System;
+using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.IO.MemoryMappedFiles;
 using System.Runtime.InteropServices;
@@ -51,6 +53,11 @@ namespace Voron.Impl
 		public override byte* AcquirePagePointer(long pageNumber)
 		{
 			return PagerState.Base + (pageNumber*PageSize);
+		}
+
+		public override void Flush(long start, long count)
+		{
+			//TODO arek
 		}
 
 		public override void AllocateMorePages(Transaction tx, long newLength)
@@ -111,26 +118,35 @@ namespace Voron.Impl
 				NativeFileMethods.FlushFileBuffers(_fileHandle);
 		}
 
-	    public override void Write(Page page)
-	    {
+		public override int Write(Page page, long writeToPage)
+		{
 			uint written;
-			
-			var position = page.PageNumber * PageSize;
-		    var nativeOverlapped = new NativeOverlapped()
-			    {
-				    OffsetLow = (int) (position & 0xffffffff),
-				    OffsetHigh = (int) (position >> 32)
-			    };
 
-		    var toWrite = page.IsOverflow ? (uint) page.OverflowSize : (uint) PageSize;
+			var position = writeToPage * PageSize;
 
+			var nativeOverlapped = new NativeOverlapped()
+			{
+				OffsetLow = (int)(position & 0xffffffff),
+				OffsetHigh = (int)(position >> 32)
+			};
 
-		    if (NativeFileMethods.WriteFile(_fileHandle, new IntPtr(page.Base), toWrite, out written, ref nativeOverlapped) == false)
-		    {
-			    var win32Error = Marshal.GetLastWin32Error();
-			    throw new IOException("Writing to file failed. Error code: " + win32Error);
-		    }
-	    }
+			var toWrite = page.IsOverflow ? page.OverflowSize : PageSize;
+
+			if (NativeFileMethods.WriteFile(_fileHandle, new IntPtr(page.Base), (uint) toWrite, out written, ref nativeOverlapped) == false)
+			{
+				var win32Error = Marshal.GetLastWin32Error();
+				throw new IOException("Writing to file failed. Error code: " + win32Error);
+			}
+
+			Debug.Assert(toWrite == written);
+
+			return toWrite;
+		}
+
+		public override int  Write(Page page)
+		{
+			return Write(page, page.PageNumber);
+		}
 
 	    public override void Dispose()
 		{

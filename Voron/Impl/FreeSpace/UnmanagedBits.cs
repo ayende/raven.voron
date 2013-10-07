@@ -53,7 +53,7 @@ namespace Voron.Impl.FreeSpace
 
 			_capacity = NumberOfBitsForSizeInBytes(sizeForBits);
 
-			AllModificationBits = DivideAndRoundUp(sizeForBits, pageSize);
+			AllModificationBits = MathUtils.DivideAndRoundUp(sizeForBits, pageSize);
 			MaxNumberOfPages = _capacity - NumberOfBitsForSizeInBytes(BytesTakenByModificationBits);
 			ModificationBitsInUse = (long)Math.Ceiling((NumberOfTrackedPages / 8f) / _pageSize);
 
@@ -80,7 +80,7 @@ namespace Voron.Impl.FreeSpace
 
 		public long BytesTakenByModificationBits
 		{
-			get { return sizeof(int) * DivideAndRoundUp(AllModificationBits, 32); }
+			get { return sizeof(int) * MathUtils.DivideAndRoundUp(AllModificationBits, 32); }
 		}
 
 		internal long TotalNumberOfFreePages { get; set; }
@@ -108,7 +108,7 @@ namespace Voron.Impl.FreeSpace
 			// most of the cases everything will be contained in a one page
 			var lastPageNumber = StartPageNumber + _allocatedPages - 1;
 
-			var numberOfPagesTakenByModificationBitsAndDirtyFlag = DivideAndRoundUp(BytesTakenByModificationBits + DirtyFlagSizeInBytes, _pageSize);
+			var numberOfPagesTakenByModificationBitsAndDirtyFlag = MathUtils.DivideAndRoundUp(BytesTakenByModificationBits + DirtyFlagSizeInBytes, _pageSize);
 
 			for (var i = 0; i < numberOfPagesTakenByModificationBitsAndDirtyFlag; i++)
 			{
@@ -195,8 +195,8 @@ namespace Voron.Impl.FreeSpace
 		public static long CalculateSizeInBytesForAllocation(long numberOfPages, int pageSize)
 		{
 			var sizeForFreePages = GetSizeInBytesFor(numberOfPages);
-			var numberOfModificationBits = DivideAndRoundUp(sizeForFreePages, pageSize);
-			var sizeForModificationBits = sizeof(int) * DivideAndRoundUp(numberOfModificationBits, 32);
+			var numberOfModificationBits = MathUtils.DivideAndRoundUp(sizeForFreePages, pageSize);
+			var sizeForModificationBits = sizeof(int) * MathUtils.DivideAndRoundUp(numberOfModificationBits, 32);
 
 			return DirtyFlagSizeInBytes + sizeForFreePages + sizeForModificationBits;
 		}
@@ -258,7 +258,7 @@ namespace Voron.Impl.FreeSpace
 				var toCopy = _pageSize;
 
 				if (i == ModificationBitsInUse - 1) // last piece of free bits can take less bytes than pageSize
-					toCopy = (int)DivideAndRoundUp(NumberOfTrackedPages - (_pageSize * i * 8), 8);
+					toCopy = (int) MathUtils.DivideAndRoundUp(NumberOfTrackedPages - (_pageSize * i * 8), 8);
 
 				NativeMethods.memcpy((byte*)other._freePagesPtr + (_pageSize * i), (byte*)_freePagesPtr + (_pageSize * i), toCopy);
 
@@ -279,11 +279,6 @@ namespace Voron.Impl.FreeSpace
 		public bool IsFree(long pos)
 		{
 			return GetBit(_freePagesPtr, NumberOfTrackedPages, pos);
-		}
-
-		private static long DivideAndRoundUp(long numerator, long denominator)
-		{
-			return (numerator + denominator - 1) / denominator;
 		}
 
 		public void IncreaseSize(long newNumberOfPagesToTrack)

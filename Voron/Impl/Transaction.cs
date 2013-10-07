@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.Linq;
 using Voron.Impl.FileHeaders;
 using Voron.Impl.FreeSpace;
+using Voron.Impl.WriteAheadLog;
 using Voron.Trees;
 
 namespace Voron.Impl
@@ -12,8 +13,9 @@ namespace Voron.Impl
 	{
 		public long NextPageNumber;
 
-		private readonly IVirtualPager _pager;
 		private readonly StorageEnvironment _env;
+		private readonly LogFile _log;
+		private readonly IVirtualPager _dataPager;
 		private readonly long _id;
 
 		private TreeDataInTransaction _rootTreeData;
@@ -32,11 +34,6 @@ namespace Voron.Impl
 			get { return _env; }
 		}
 
-		public IVirtualPager Pager
-		{
-			get { return _pager; }
-		}
-
 		public long Id
 		{
 			get { return _id; }
@@ -47,7 +44,7 @@ namespace Voron.Impl
 
 		public Page TempPage
 		{
-			get { return _pager.TempPage; }
+			get { return _log.Pager.TempPage; }
 		}
 
 		public Dictionary<string, Tree> ModifiedTrees
@@ -67,9 +64,15 @@ namespace Voron.Impl
 			get { return _freeSpaceBuffer; }
 		}
 
-		public Transaction(IVirtualPager pager, StorageEnvironment env, long id, TransactionFlags flags, UnmanagedBits freeSpaceBuffer)
+		public IVirtualPager Pager
 		{
-			_pager = pager;
+			get { return _dataPager; }
+		}
+
+		public Transaction(LogFile log, IVirtualPager dataPager, StorageEnvironment env, long id, TransactionFlags flags, UnmanagedBits freeSpaceBuffer)
+		{
+			_log = log;
+			_dataPager = dataPager;
 			_env = env;
 			_id = id;
 			_freeSpaceBuffer = freeSpaceBuffer;
@@ -112,8 +115,11 @@ namespace Voron.Impl
 			        _dirtyPagesBackend.TryGetValue(dirtyPageNum, out page);
 
 				if(page == null)
-                    page = _pager.Get(this, dirtyPageNum);
-				
+                    page = _log.GetPage(this, dirtyPageNum);
+
+				if (page == null)
+					page = _dataPager.Get(this, dirtyPageNum);
+
                 page.Dirty = true;
 				
                 UpdateParentPageNumber(parent, page.PageNumber);
@@ -122,8 +128,8 @@ namespace Voron.Impl
 			}
 			var newPage = AllocatePage(1);
 			var newPageNum = newPage.PageNumber;
-			page = c.GetPage(p) ?? _pager.Get(this, p);
-			NativeMethods.memcpy(newPage.Base, page.Base, _pager.PageSize);
+			page = c.GetPage(p) ?? _log.GetPage(this, p) ?? _dataPager.Get(this, p);
+			NativeMethods.memcpy(newPage.Base, page.Base, _dataPager.PageSize);
 			newPage.LastSearchPosition = page.LastSearchPosition;
 			newPage.LastMatch = page.LastMatch;
 			newPage.PageNumber = newPageNum;
@@ -155,7 +161,7 @@ namespace Voron.Impl
 			if(_dirtyPagesBackend.TryGetValue(n, out dirtyInTransaction))
 				return dirtyInTransaction;
 
-			return _pager.Get(this, n);
+			return _log.GetPage(this, n) ?? _dataPager.Get(this, n);
 		}
 
 		private long? TryAllocateFromFreeSpace(int numberOfPages)
@@ -176,16 +182,16 @@ namespace Voron.Impl
 			var pageNum = TryAllocateFromFreeSpace(numberOfPages);
 			if (pageNum == null) // allocate from end of file
 			{
-				_pager.EnsureContinuous(this, NextPageNumber, numberOfPages);
+				//TODO arek _pager.EnsureContinuous(this, NextPageNumber, numberOfPages);
 			    pageNum = NextPageNumber;
 				NextPageNumber += numberOfPages;
 			}
-		    var ptr = Environment.Heap.Allocate(numberOfPages*Pager.PageSize);
-		    var page = new Page(ptr, Pager.PageMaxSpace)
+		    var ptr = Environment.Heap.Allocate(numberOfPages*_dataPager.PageSize);
+		    var page = new Page(ptr, _dataPager.PageMaxSpace)
 		        {
 		            PageNumber = pageNum.Value,
 		            Lower = (ushort) Constants.PageHeaderSize,
-		            Upper = (ushort) _pager.PageSize,
+		            Upper = (ushort) _dataPager.PageSize,
 		            Dirty = true
 		        };
 		    _dirtyPages[page.PageNumber] = page.PageNumber;
@@ -252,16 +258,10 @@ namespace Voron.Impl
 				_env.FreeSpaceHandling.UpdateChecksum(_freeSpaceBuffer.CalculateChecksum());
 			}
 
+			UpdateHeaderPage(_id & 1); // this will cycle between the first and second pages
 
-		    var sortedPages = _dirtyPagesBackend.OrderBy(x => x.Key).Select(x => x.Value);
-		    foreach (var sortedPage in sortedPages)
-		    {
-		        _pager.Write(sortedPage);
-		    }
-
-			WriteHeader(_id & 1); // this will cycle between the first and second pages
-
-			_pager.Sync();
+		    var sortedPages = _dirtyPagesBackend.OrderBy(x => x.Key).Select(x => x.Value).ToList();
+		   _log.Write(sortedPages);
 
 			Committed = true;
 
@@ -291,15 +291,13 @@ namespace Voron.Impl
 			}
 		}
 
-		private unsafe void WriteHeader(long pageNumber)
+		private unsafe void UpdateHeaderPage(long pageNumber)
 		{
-			var ptr = _env.Heap.Allocate(_pager.PageSize);
+			var ptr = _env.Heap.Allocate(_log.Pager.PageSize);
 
-			var page = new Page(ptr, _pager.PageMaxSpace)
+			var page = new Page(ptr, -1)
 			{
-				PageNumber = pageNumber,
-				Lower = (ushort)Constants.PageHeaderSize,
-				Upper = (ushort)_pager.PageSize,
+				PageNumber = pageNumber
 			};
 
 			var fileHeader = ((FileHeader*)page.Base + Constants.PageHeaderSize);
@@ -312,8 +310,7 @@ namespace Voron.Impl
 			_env.FreeSpaceHandling.CopyStateTo(&fileHeader->FreeSpace);
 			_env.Root.State.CopyTo(&fileHeader->Root);
 
-			_pager.Write(page);
-			_env.Heap.Free(ptr);
+			_dirtyPagesBackend[pageNumber] = page;
 		}
 
 		public void Dispose()
@@ -360,7 +357,7 @@ namespace Voron.Impl
 			//	Environment.Heap.Free(page.Base);
 			//}
 #if DEBUG
-			Debug.Assert(pageNumber >= 2 && pageNumber <= _pager.NumberOfAllocatedPages);
+			Debug.Assert(pageNumber >= 2);//TODO arek && pageNumber <= _dataPager.NumberOfAllocatedPages);
 			Debug.Assert(_freedPages.Contains(pageNumber) == false);
 #endif
 			_freedPages.Add(pageNumber);

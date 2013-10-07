@@ -9,23 +9,23 @@ namespace Voron.Tryout
     {
         private static void Main(string[] args)
         {
-	        var filePtr = UnmanagedFileAccess.CreateFile("file.txt", FileAccess.Write, FileShare.None, IntPtr.Zero,
-	                                                     FileMode.OpenOrCreate, FileAttributes.Normal, IntPtr.Zero);
+			//var filePtr = NativeFileMethods.CreateFile("file.txt", FileAccess.Write, FileShare.None, IntPtr.Zero,
+			//											 FileMode.OpenOrCreate, FileAttributes.Normal, IntPtr.Zero);
 
-	        uint written;
-			NativeOverlapped n = new NativeOverlapped();
-	        n.OffsetLow = 1024 * 1024 * 2;
-	        unsafe
-	        {
-		        var bytes = new byte[] {1, 2, 3};
-		        fixed (byte* p = bytes)
-		        {
-			        UnmanagedFileAccess.WriteFile(filePtr.DangerousGetHandle(), new IntPtr(p), 3, out written, ref n);
-		        }
-	        }
+			//uint written;
+			//NativeOverlapped n = new NativeOverlapped();
+			//n.OffsetLow = 1024 * 1024 * 2;
+			//unsafe
+			//{
+			//	var bytes = new byte[] {1, 2, 3};
+			//	fixed (byte* p = bytes)
+			//	{
+			//		NativeFileMethods.WriteFile(filePtr.DangerousGetHandle(), new IntPtr(p), 3, out written, ref n);
+			//	}
+			//}
 	        
-			filePtr.Close();
-	        //UnmanagedFileAccess.CloseHandle(filePtr.DangerousGetHandle());
+			//filePtr.Close();
+	        //NativeFileMethods.CloseHandle(filePtr.DangerousGetHandle());
         }
 
 		private static int Test(int i)

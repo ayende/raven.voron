@@ -67,7 +67,7 @@ namespace Voron.Trees
                     // here we steal the last entry from the current page so we maintain the implicit null left entry
                     var node = _page.GetNode(_page.NumberOfEntries - 1);
                     Debug.Assert(node->Flags == NodeFlags.PageRef);
-                    var itemsMoved = _tx.Pager.Get(_tx, node->PageNumber).ItemCount;
+                    var itemsMoved = _tx.GetReadOnlyPage(node->PageNumber).ItemCount;
                     rightPage.AddNode(0, Slice.Empty, -1, node->PageNumber, 0);
 					pos = rightPage.AddNode(1, this._newKey, this._len, this._pageNumber, this._nodeVersion);
                     rightPage.ItemCount = itemsMoved;
@@ -127,7 +127,7 @@ namespace Voron.Trees
                 if (_page.IsBranch && rightPage.NumberOfEntries == 0)
                 {
                     rightPage.CopyNodeDataToEndOfPage(node, Slice.Empty);
-                    itemsMoved = _tx.Pager.Get(_tx, node->PageNumber).ItemCount;
+                    itemsMoved = _tx.GetReadOnlyPage(node->PageNumber).ItemCount;
                 }
                 else
                 {
@@ -192,7 +192,7 @@ namespace Voron.Trees
                                                       ref bool newPosition)
         {
             var nodeSize = SizeOf.NodeEntry(_tx.Pager.PageMaxSpace, key, len) + Constants.NodeOffsetSize;
-            if (page.NumberOfEntries >= 20 && nodeSize <= _tx.Pager.PageMaxSpace / 16)
+			if (page.NumberOfEntries >= 20 && nodeSize <= _tx.Pager.PageMaxSpace / 16)
             {
                 return splitIndex;
             }
@@ -206,7 +206,7 @@ namespace Voron.Trees
                     var node = page.GetNode(i);
                     pageSize += node->GetNodeSize();
                     pageSize += pageSize & 1;
-                    if (pageSize > _tx.Pager.PageMaxSpace)
+					if (pageSize > _tx.Pager.PageMaxSpace)
                     {
                         if (i <= currentIndex)
                         {
@@ -225,7 +225,7 @@ namespace Voron.Trees
                     var node = page.GetNode(i);
                     pageSize += node->GetNodeSize();
                     pageSize += pageSize & 1;
-                    if (pageSize > _tx.Pager.PageMaxSpace)
+					if (pageSize > _tx.Pager.PageMaxSpace)
                     {
                         if (i >= currentIndex)
                         {

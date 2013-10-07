@@ -54,8 +54,13 @@
     <Compile Include="Impl\FileHeaders\TreeFlags.cs" />
     <Compile Include="Impl\FileHeaders\TreeRootHeader.cs" />
     <Compile Include="Impl\FlushMode.cs" />
+    <Compile Include="Util\MathUtils.cs" />
     <Compile Include="Impl\IVirtualPager.cs" />
     <Compile Include="Impl\FilePager.cs" />
+    <Compile Include="Impl\MemoryMappedPager.cs" />
+    <Compile Include="Impl\WriteAheadLog\LogEntryHeader.cs" />
+    <Compile Include="Impl\WriteAheadLog\LogFile.cs" />
+    <Compile Include="Impl\WriteAheadLog\LogEntry.cs" />
     <Compile Include="Impl\PagerState.cs" />
     <Compile Include="Impl\PureMemoryPager.cs" />
     <Compile Include="Impl\SnapshotReader.cs" />

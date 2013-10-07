@@ -13,7 +13,7 @@ namespace Voron.Benchmark
         private static HashSet<long> _randomNumbers;
         public const int ItemsPerTransaction = 100;
         private const int Transactions = 500;
-        private const string Path = @"e:\data\bench.data";
+        private const string Path = @"bench.data";
 
         public static void Main()
         {
@@ -95,7 +95,7 @@ namespace Voron.Benchmark
 
         private static void FillRandomOneTransaction(Stopwatch sw, FlushMode flushMode)
         {
-            var memoryMapPager = new MemoryMapPager(Path, flushMode);
+            var memoryMapPager = new FilePager(Path, flushMode);
             using (var env = new StorageEnvironment(memoryMapPager))
             {
                 var value = new byte[100];
@@ -127,7 +127,7 @@ namespace Voron.Benchmark
 
         private static void FillSeqOneTransaction(Stopwatch sw, FlushMode flushMode)
         {
-            var memoryMapPager = new MemoryMapPager(Path, flushMode);
+            var memoryMapPager = new FilePager(Path, flushMode);
             using (var env = new StorageEnvironment(memoryMapPager))
             {
                 var value = new byte[100];
@@ -159,7 +159,7 @@ namespace Voron.Benchmark
 
         private static void FillRandomMultipleTransaction(Stopwatch sw, FlushMode flushMode)
         {
-            var memoryMapPager = new MemoryMapPager(Path, flushMode);
+            var memoryMapPager = new FilePager(Path, flushMode);
             using (var env = new StorageEnvironment(memoryMapPager))
             {
                 var value = new byte[100];
@@ -194,7 +194,7 @@ namespace Voron.Benchmark
 
         private static void FillSeqMultipleTransaction(Stopwatch sw, FlushMode flushMode)
         {
-            var memoryMapPager = new MemoryMapPager(Path, flushMode);
+            var memoryMapPager = new FilePager(Path, flushMode);
             using (var env = new StorageEnvironment(memoryMapPager))
             {
                 var value = new byte[100];
@@ -230,7 +230,7 @@ namespace Voron.Benchmark
 
         private static void ReadOneTransaction_Parallel(Stopwatch sw, int concurrency)
         {
-            using (var env = new StorageEnvironment(new MemoryMapPager(Path)))
+            using (var env = new StorageEnvironment(new FilePager(Path)))
             {
                 var countdownEvent = new CountdownEvent(concurrency);
 
@@ -268,7 +268,7 @@ namespace Voron.Benchmark
 
         private static void ReadOneTransaction(Stopwatch sw)
         {
-            using (var env = new StorageEnvironment(new MemoryMapPager(Path)))
+            using (var env = new StorageEnvironment(new FilePager(Path)))
             {
                 sw.Start();
                 using (var tx = env.NewTransaction(TransactionFlags.Read))
@@ -293,7 +293,7 @@ namespace Voron.Benchmark
 
         private static void ReadAndWriteOneTransaction(Stopwatch sw, int concurrency)
         {
-            var memoryMapPager = new MemoryMapPager(Path, FlushMode.None);
+            var memoryMapPager = new FilePager(Path, FlushMode.None);
             using (var env = new StorageEnvironment(memoryMapPager))
             {
                 var value = new byte[100];

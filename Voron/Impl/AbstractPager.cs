@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using Voron.Impl.FreeSpace;
 using Voron.Trees;
@@ -46,6 +47,7 @@ namespace Voron.Impl
         }
 
 	    public abstract byte* AcquirePagePointer(long pageNumber);
+	    public abstract void Flush(long startPage, long count);
 
         protected Page Get(long n)
         {
@@ -91,7 +93,8 @@ namespace Voron.Impl
 			}
         }
 
-        public abstract unsafe void Write(Page page);
+        public abstract int Write(Page page);
+	    public abstract int Write(Page page, long writeToPage);
 
         public void EnsureFreeSpaceTrackingHasEnoughSpace(Transaction tx, int pageCount)
 		{
