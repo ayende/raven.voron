@@ -6,7 +6,7 @@
 
 using System.Runtime.InteropServices;
 
-namespace Voron.Impl.WriteAheadLog
+namespace Voron.Impl.Log
 {
 	[StructLayout(LayoutKind.Explicit, Pack = 1)]
 	public struct LogEntryHeader

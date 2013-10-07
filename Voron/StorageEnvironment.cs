@@ -8,7 +8,7 @@ using Voron.Debugging;
 using Voron.Impl;
 using Voron.Impl.FileHeaders;
 using Voron.Impl.FreeSpace;
-using Voron.Impl.WriteAheadLog;
+using Voron.Impl.Log;
 using Voron.Trees;
 using Voron.Util;
 

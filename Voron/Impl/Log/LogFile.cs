@@ -7,11 +7,9 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using Voron.Impl.FreeSpace;
 using Voron.Trees;
-using Voron.Util;
 
-namespace Voron.Impl.WriteAheadLog
+namespace Voron.Impl.Log
 {
 	public unsafe class LogFile : IDisposable
 	{

@@ -4,7 +4,7 @@ using System.Diagnostics;
 using System.Linq;
 using Voron.Impl.FileHeaders;
 using Voron.Impl.FreeSpace;
-using Voron.Impl.WriteAheadLog;
+using Voron.Impl.Log;
 using Voron.Trees;
 
 namespace Voron.Impl
@@ -14,7 +14,7 @@ namespace Voron.Impl
 		public long NextPageNumber;
 
 		private readonly StorageEnvironment _env;
-		private readonly LogFile _log;
+		private readonly WriteAheadLog _log;
 		private readonly IVirtualPager _dataPager;
 		private readonly long _id;
 
@@ -43,7 +43,7 @@ namespace Voron.Impl
 
 		public Page TempPage
 		{
-			get { return _log.Pager.TempPage; }
+			get { return _dataPager.TempPage; }
 		}
 
 		public Dictionary<string, Tree> ModifiedTrees
@@ -68,7 +68,7 @@ namespace Voron.Impl
 			get { return _dataPager; }
 		}
 
-		public Transaction(LogFile log, IVirtualPager dataPager, StorageEnvironment env, long id, TransactionFlags flags, UnmanagedBits freeSpaceBuffer)
+		public Transaction(WriteAheadLog log, IVirtualPager dataPager, StorageEnvironment env, long id, TransactionFlags flags, UnmanagedBits freeSpaceBuffer)
 		{
 			_log = log;
 			_dataPager = dataPager;

@@ -7,7 +7,7 @@
 using System.Collections.Generic;
 using Voron.Trees;
 
-namespace Voron.Impl.WriteAheadLog
+namespace Voron.Impl.Log
 {
 	public class LogEntry
 	{
