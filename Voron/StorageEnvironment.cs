@@ -33,7 +33,6 @@ namespace Voron
 
         public TransactionMergingWriter Writer { get; private set; }
 
-        private Heap _heap;
 	    private LogFile _log;
 
 	    public SnapshotReader CreateSnapshot()
@@ -48,7 +47,6 @@ namespace Voron
 				_dataPager = pager;
 				_ownsPager = ownsPager;
 				_sliceComparer = NativeMethods.memcmp;
-                _heap = new Heap();
 				FreeSpaceHandling = new BinaryFreeSpaceStrategy(n => new IntPtr(_dataPager.AcquirePagePointer(n)));
 				_log = new LogFile(new MemoryMapPager("voron.log"));
 
@@ -66,10 +64,13 @@ namespace Voron
 
         private void Setup(IVirtualPager pager)
         {
-            if (pager.NumberOfAllocatedPages == 0)
+			//TODO - temp sulution
+			_log.Pager.AllocateMorePages(null, 64 * 1024 * 1024);
+			
+	        if (pager.NumberOfAllocatedPages == 0)
             {
-                WriteEmptyHeaderPage(0);
-                WriteEmptyHeaderPage(1);
+                WriteEmptyHeaderPage(_log.Allocate(0, 1));
+                WriteEmptyHeaderPage(_log.Allocate(1, 1));
 
 				var freeSpaceHeader = new FreeSpaceHeader
 					{
@@ -212,32 +213,15 @@ namespace Voron
 				activeTransaction.Value.Dispose();
 			}
 
-            if(_heap != null)
-                _heap.Dispose();
-
 			if (_ownsPager)
 				_dataPager.Dispose();
 
 			_log.Dispose();
 		}
 
-        public Heap Heap
+        private void WriteEmptyHeaderPage(Page page)
         {
-            get { return _heap; }
-        }
-
-        private void WriteEmptyHeaderPage(long pageNumber)
-		{
-	        var ptr = _heap.Allocate(_dataPager.PageSize);
-
-			var page = new Page(ptr, _dataPager.PageMaxSpace)
-			{
-				PageNumber = pageNumber,
-				Lower = (ushort)Constants.PageHeaderSize,
-				Upper = (ushort)_dataPager.PageSize,
-			};
-
-			var fileHeader = ((FileHeader*)page.Base + Constants.PageHeaderSize);
+			var fileHeader = ((FileHeader*)page.Base);
 			fileHeader->MagicMarker = Constants.MagicMarker;
 			fileHeader->Version = Constants.CurrentVersion;
 			fileHeader->TransactionId = 0;
@@ -249,11 +233,6 @@ namespace Voron
 			fileHeader->FreeSpace.PageSize = -1;
 			fileHeader->FreeSpace.Checksum = 0;
 			fileHeader->Root.RootPageNumber = -1;
-		
-			_dataPager.Write(page);
-
-			_dataPager.Sync();
-			_heap.Free(ptr);
 		}
 
         private FileHeader* FindLatestFileHeadeEntry()

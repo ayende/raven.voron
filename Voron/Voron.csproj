@@ -96,7 +96,6 @@
     <Compile Include="Trees\TreeRebalancer.cs" />
     <Compile Include="Impl\FreeSpace\UnmanagedBits.cs" />
     <Compile Include="Util\Crc.cs" />
-    <Compile Include="Util\Heap.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 

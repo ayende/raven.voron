@@ -6,6 +6,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using Voron.Impl.FreeSpace;
 using Voron.Trees;
 using Voron.Util;
@@ -17,6 +18,7 @@ namespace Voron.Impl.WriteAheadLog
 		private readonly IVirtualPager _pager;
 		private readonly Dictionary<long, long> _pageTranslationTable = new Dictionary<long, long>(); // TODO after restart we need to recover those values
 		private long _writePage;//TODO after restart we need to recover this value
+		private long _lastFlushedPage = -1;
 
 		public LogFile(IVirtualPager pager)
 		{
@@ -29,26 +31,25 @@ namespace Voron.Impl.WriteAheadLog
 			get { return _pager; }
 		}
 
-		public void Write(List<Page> pages)
+		public void TransactionBegin()
 		{
-			long start = _writePage;
-			var logEntryHeaderPage = _pager.Get(null, _writePage);
-			logEntryHeaderPage.PageNumber = _writePage;
+			if (_lastFlushedPage != _writePage - 1)
+				_writePage = _lastFlushedPage + 1;
 
-			var logEntryHeader = (LogEntryHeader*)(logEntryHeaderPage.Base + Constants.PageHeaderSize);
-			logEntryHeader->PageCount = pages.Count;
+			var page = Allocate(_writePage, 1);
 
-			_writePage++;
+			var header = (LogEntryHeader*) page.Base;
+		}
 
-			foreach (var page in pages)
-			{
-				var written = _pager.Write(page, _writePage);
-				_pageTranslationTable[page.PageNumber] = _writePage;
-				_writePage += MathUtils.DivideAndRoundUp(written, _pager.PageSize); // page could be an overflow so it can takes more than one page
-			}
+		public void Flush()
+		{
+			var start = _lastFlushedPage + 1;
+			var count = _writePage - start;
 
-			_pager.Flush(start, _writePage - start);
+			_pager.Flush(start, count);
 			_pager.Sync();
+
+			_lastFlushedPage += count;
 		}
 
 		public Page GetPage(Transaction tx, long pageNumber)
@@ -57,6 +58,21 @@ namespace Voron.Impl.WriteAheadLog
 				return null;
 
 			return _pager.Get(tx, _pageTranslationTable[pageNumber]);
+		}
+
+		public Page Allocate(long startPage, int numberOfPages)
+		{
+			Debug.Assert(_writePage + numberOfPages <= _pager.NumberOfAllocatedPages);
+
+			var result = _pager.Get(null, _writePage);
+
+			for (var i = 0; i < numberOfPages; i++)
+			{
+				_pageTranslationTable[startPage + i] = _writePage;
+				_writePage++;
+			}
+
+			return result;
 		}
 
 		public void Dispose()

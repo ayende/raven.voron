@@ -22,7 +22,6 @@ namespace Voron.Impl
 		private Dictionary<Tuple<Tree, Slice>, Tree> _multiValueTrees;
 		private readonly Dictionary<Tree, TreeDataInTransaction> _treesInfo = new Dictionary<Tree, TreeDataInTransaction>();
 		private readonly Dictionary<long, long> _dirtyPages = new Dictionary<long, long>();
-        private readonly Dictionary<long, Page> _dirtyPagesBackend = new Dictionary<long, Page>();
 		private readonly List<long> _freedPages = new List<long>();
 		private readonly HashSet<PagerState> _pagerStates = new HashSet<PagerState>();
 		private readonly UnmanagedBits _freeSpaceBuffer;
@@ -78,6 +77,8 @@ namespace Voron.Impl
 			_freeSpaceBuffer = freeSpaceBuffer;
 			Flags = flags;
 			NextPageNumber = env.NextPageNumber;
+
+			_log.TransactionBegin();
 		}
 
 		public Page ModifyCursor(Tree tree, Cursor c)
@@ -111,9 +112,6 @@ namespace Voron.Impl
 			{
                 page = c.GetPage(dirtyPageNum);
 			    
-                if (page == null)
-			        _dirtyPagesBackend.TryGetValue(dirtyPageNum, out page);
-
 				if(page == null)
                     page = _log.GetPage(this, dirtyPageNum);
 
@@ -157,10 +155,6 @@ namespace Voron.Impl
 			if (_dirtyPages.TryGetValue(n, out dirtyPage))
 				n = dirtyPage;
 
-			Page dirtyInTransaction;
-			if(_dirtyPagesBackend.TryGetValue(n, out dirtyInTransaction))
-				return dirtyInTransaction;
-
 			return _log.GetPage(this, n) ?? _dataPager.Get(this, n);
 		}
 
@@ -177,25 +171,23 @@ namespace Voron.Impl
 		    return page;
 		}
 
-		public unsafe Page AllocatePage(int numberOfPages)
+		public Page AllocatePage(int numberOfPages)
 		{
 			var pageNum = TryAllocateFromFreeSpace(numberOfPages);
 			if (pageNum == null) // allocate from end of file
 			{
-				//TODO arek _pager.EnsureContinuous(this, NextPageNumber, numberOfPages);
 			    pageNum = NextPageNumber;
 				NextPageNumber += numberOfPages;
 			}
-		    var ptr = Environment.Heap.Allocate(numberOfPages*_dataPager.PageSize);
-		    var page = new Page(ptr, _dataPager.PageMaxSpace)
-		        {
-		            PageNumber = pageNum.Value,
-		            Lower = (ushort) Constants.PageHeaderSize,
-		            Upper = (ushort) _dataPager.PageSize,
-		            Dirty = true
-		        };
+
+			var page = _log.Allocate(pageNum.Value, numberOfPages);
+
+			page.PageNumber = pageNum.Value;
+			page.Lower = (ushort) Constants.PageHeaderSize;
+			page.Upper = (ushort) _dataPager.PageSize;
+			page.Dirty = true;
+
 		    _dirtyPages[page.PageNumber] = page.PageNumber;
-		    _dirtyPagesBackend[page.PageNumber] = page;
 			return page;
 		}
 
@@ -258,10 +250,9 @@ namespace Voron.Impl
 				_env.FreeSpaceHandling.UpdateChecksum(_freeSpaceBuffer.CalculateChecksum());
 			}
 
-			UpdateHeaderPage(_id & 1); // this will cycle between the first and second pages
+			WriteHeader(_id & 1); // this will cycle between the first and second pages
 
-		    var sortedPages = _dirtyPagesBackend.OrderBy(x => x.Key).Select(x => x.Value).ToList();
-		   _log.Write(sortedPages);
+			_log.Flush();
 
 			Committed = true;
 
@@ -291,26 +282,24 @@ namespace Voron.Impl
 			}
 		}
 
-		private unsafe void UpdateHeaderPage(long pageNumber)
+		private unsafe void WriteHeader(long pageNumber)
 		{
-			var ptr = _env.Heap.Allocate(_log.Pager.PageSize);
-
-			var page = new Page(ptr, -1)
-			{
-				PageNumber = pageNumber
-			};
+			if(_env.Root == null)
+				return;
+			
+			var page = _log.Allocate(pageNumber, 1);
+			page.PageNumber = pageNumber;
 
 			var fileHeader = ((FileHeader*)page.Base + Constants.PageHeaderSize);
 
 			fileHeader->MagicMarker = Constants.MagicMarker;
 			fileHeader->Version = Constants.CurrentVersion;
-
 			fileHeader->TransactionId = _id;
 			fileHeader->LastPageNumber = NextPageNumber - 1;
 			_env.FreeSpaceHandling.CopyStateTo(&fileHeader->FreeSpace);
 			_env.Root.State.CopyTo(&fileHeader->Root);
 
-			_dirtyPagesBackend[pageNumber] = page;
+			_dirtyPages[pageNumber] = pageNumber;
 		}
 
 		public void Dispose()
@@ -346,20 +335,13 @@ namespace Voron.Impl
 			return c;
 		}
 
-		public unsafe void FreePage(long pageNumber)
+		public void FreePage(long pageNumber)
 		{
 			_dirtyPages.Remove(pageNumber);
-			//TODO arek - temporary do not remove because it causes some problems in later use of this freed pages e.g.: getting page number
-			//Page page;
-			//if (_dirtyPagesBackend.TryGetValue(pageNumber, out page))
-			//{
-			//	_dirtyPagesBackend.Remove(pageNumber);
-			//	Environment.Heap.Free(page.Base);
-			//}
-#if DEBUG
+
 			Debug.Assert(pageNumber >= 2);//TODO arek && pageNumber <= _dataPager.NumberOfAllocatedPages);
 			Debug.Assert(_freedPages.Contains(pageNumber) == false);
-#endif
+
 			_freedPages.Add(pageNumber);
 		}
 
