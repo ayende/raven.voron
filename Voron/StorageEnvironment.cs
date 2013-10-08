@@ -24,7 +24,6 @@ namespace Voron
 
         private readonly bool _ownsPager;
         private readonly IVirtualPager _dataPager;
-		private readonly IVirtualPager _logFilePager;
         private readonly SliceComparer _sliceComparer;
 
         private readonly SemaphoreSlim _txWriter = new SemaphoreSlim(1);
@@ -33,7 +32,7 @@ namespace Voron
 
         public TransactionMergingWriter Writer { get; private set; }
 
-	    private LogFile _log;
+	    private readonly WriteAheadLog _log;
 
 	    public SnapshotReader CreateSnapshot()
         {
@@ -48,7 +47,7 @@ namespace Voron
 				_ownsPager = ownsPager;
 				_sliceComparer = NativeMethods.memcmp;
 				FreeSpaceHandling = new BinaryFreeSpaceStrategy(n => new IntPtr(_dataPager.AcquirePagePointer(n)));
-				_log = new LogFile(new MemoryMapPager("voron.log"));
+				_log = new WriteAheadLog(FlushMode.Full);
 
 				Setup(pager);
 				Root.Name = "Root";
@@ -64,13 +63,10 @@ namespace Voron
 
         private void Setup(IVirtualPager pager)
         {
-			//TODO - temp sulution
-			_log.Pager.AllocateMorePages(null, 64 * 1024 * 1024);
-			
 	        if (pager.NumberOfAllocatedPages == 0)
             {
-                WriteEmptyHeaderPage(_log.Allocate(0, 1));
-                WriteEmptyHeaderPage(_log.Allocate(1, 1));
+                WriteEmptyHeaderPage(_log.Allocate(null, 0, 1));
+                WriteEmptyHeaderPage(_log.Allocate(null, 1, 1));
 
 				var freeSpaceHeader = new FreeSpaceHeader
 					{

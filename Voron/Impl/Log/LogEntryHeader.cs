@@ -13,5 +13,8 @@ namespace Voron.Impl.Log
 	{
 		[FieldOffset(0)]
 		public int PageCount;
+
+		[FieldOffset(4)] 
+		public TransactionStateMarker TransactionMarker;
 	}
 }

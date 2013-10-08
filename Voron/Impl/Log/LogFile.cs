@@ -17,6 +17,8 @@ namespace Voron.Impl.Log
 		private readonly Dictionary<long, long> _pageTranslationTable = new Dictionary<long, long>(); // TODO after restart we need to recover those values
 		private long _writePage;//TODO after restart we need to recover this value
 		private long _lastFlushedPage = -1;
+		private int _allocatedPagesInTransaction = 0;
+		private LogEntryHeader* _currentEntryHeader = null;
 
 		public LogFile(IVirtualPager pager)
 		{
@@ -29,14 +31,47 @@ namespace Voron.Impl.Log
 			get { return _pager; }
 		}
 
-		public void TransactionBegin()
+		public void TransactionBegin(Transaction tx)
+		{
+			var header = CreateHeader(tx);
+			header->TransactionMarker = TransactionStateMarker.Start;
+			
+			_currentEntryHeader = header;
+			_allocatedPagesInTransaction = 0;
+		}
+
+		public void TransactionSplit(Transaction tx)
+		{
+			if (_currentEntryHeader != null)
+			{
+				_currentEntryHeader->TransactionMarker |= TransactionStateMarker.Split;
+				_currentEntryHeader->PageCount = _allocatedPagesInTransaction - 1; // minus header page
+			}
+			else
+			{
+				var header = CreateHeader(tx);
+				header->TransactionMarker = TransactionStateMarker.Split;
+				_currentEntryHeader = header;
+			}
+		}
+
+		public void TransactionCommit()
+		{
+			_currentEntryHeader->TransactionMarker |= TransactionStateMarker.Commit;
+			_currentEntryHeader->PageCount = _allocatedPagesInTransaction - 1; // minus header page
+		}
+
+		private LogEntryHeader* CreateHeader(Transaction tx)
 		{
 			if (_lastFlushedPage != _writePage - 1)
 				_writePage = _lastFlushedPage + 1;
 
-			var page = Allocate(_writePage, 1);
+			return (LogEntryHeader*) Allocate(tx, _writePage, 1).Base;
+		}
 
-			var header = (LogEntryHeader*) page.Base;
+		public long AvailablePages
+		{
+			get { return _pager.NumberOfAllocatedPages - _writePage - 1; }
 		}
 
 		public void Flush()
@@ -58,17 +93,19 @@ namespace Voron.Impl.Log
 			return _pager.Get(tx, _pageTranslationTable[pageNumber]);
 		}
 
-		public Page Allocate(long startPage, int numberOfPages)
+		public Page Allocate(Transaction tx, long startPage, int numberOfPages)
 		{
 			Debug.Assert(_writePage + numberOfPages <= _pager.NumberOfAllocatedPages);
 
-			var result = _pager.Get(null, _writePage);
+			var result = _pager.Get(tx, _writePage);
 
 			for (var i = 0; i < numberOfPages; i++)
 			{
 				_pageTranslationTable[startPage + i] = _writePage;
 				_writePage++;
 			}
+
+			_allocatedPagesInTransaction += numberOfPages;
 
 			return result;
 		}

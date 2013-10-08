@@ -78,7 +78,8 @@ namespace Voron.Impl
 			Flags = flags;
 			NextPageNumber = env.NextPageNumber;
 
-			_log.TransactionBegin();
+			if(flags == TransactionFlags.ReadWrite)
+				_log.TransactionBegin(this);
 		}
 
 		public Page ModifyCursor(Tree tree, Cursor c)
@@ -180,7 +181,7 @@ namespace Voron.Impl
 				NextPageNumber += numberOfPages;
 			}
 
-			var page = _log.Allocate(pageNum.Value, numberOfPages);
+			var page = _log.Allocate(this, pageNum.Value, numberOfPages);
 
 			page.PageNumber = pageNum.Value;
 			page.Lower = (ushort) Constants.PageHeaderSize;
@@ -287,7 +288,7 @@ namespace Voron.Impl
 			if(_env.Root == null)
 				return;
 			
-			var page = _log.Allocate(pageNumber, 1);
+			var page = _log.Allocate(this, pageNumber, 1);
 			page.PageNumber = pageNumber;
 
 			var fileHeader = ((FileHeader*)page.Base + Constants.PageHeaderSize);
