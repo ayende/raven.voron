@@ -13,6 +13,9 @@ namespace Voron.Tests
         private readonly StorageEnvironment _storageEnvironment;
         private IVirtualPager _pager;
 
+	    private readonly Func<string, IVirtualPager> _createLogFilePager =
+		    file => new MemoryMapPager(file);
+
         public StorageEnvironment Env
         {
             get { return _storageEnvironment; }
@@ -22,7 +25,7 @@ namespace Voron.Tests
         {
             FilePager();
             //_pager = new PureMemoryPager();
-            _storageEnvironment = new StorageEnvironment(_pager);
+            _storageEnvironment = new StorageEnvironment(_pager, _createLogFilePager);
         }
 
         private void FilePager()
@@ -43,6 +46,11 @@ namespace Voron.Tests
             _pager.Dispose();
             if (File.Exists("test.data"))
                 File.Delete("test.data");
+
+			foreach (var txLogFile in Directory.GetFiles(".", "*.txlog"))
+	        {
+		        File.Delete(txLogFile);
+	        } 
         }
 
         protected void RenderAndShow(Transaction tx, int showEntries = 25, string name = null)

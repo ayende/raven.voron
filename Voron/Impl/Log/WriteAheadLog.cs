@@ -12,23 +12,25 @@ namespace Voron.Impl.Log
 {
 	public class WriteAheadLog : IDisposable
 	{
-		private readonly FlushMode _logsFlushMode;
-		private int _fileIndex = -1;
+		private readonly Func<string, IVirtualPager> _createLogFilePager;
+		private readonly IVirtualPager _dataPager;
+		private int _currentNumber = -1;
 		private LogFile _currentFile = null;
 		private readonly List<LogFile> _logFiles = new List<LogFile>();
 
-		public WriteAheadLog(FlushMode logsFlushMode = FlushMode.Full)
+		public WriteAheadLog(Func<string, IVirtualPager> createLogFilePager, IVirtualPager dataPager)
 		{
-			_logsFlushMode = logsFlushMode;
+			_createLogFilePager = createLogFilePager;
+			_dataPager = dataPager;
 
-			_currentFile = CreateNextFile();
+			_currentFile = NextFile();
 		}
 
-		private LogFile CreateNextFile()
+		private LogFile NextFile()
 		{
-			_fileIndex++;
+			_currentNumber++;
 
-			var logPager = new MemoryMapPager(string.Format("{0:D10}.txlog", _fileIndex), _logsFlushMode);
+			var logPager = _createLogFilePager(string.Format("{0:D10}.txlog", _currentNumber));
 			logPager.AllocateMorePages(null, 64 * 1024 * 1024);
 
 			var log = new LogFile(logPager);
@@ -65,7 +67,7 @@ namespace Voron.Impl.Log
 			if (_currentFile.AvailablePages < numberOfPages)
 			{
 				_currentFile.TransactionSplit(tx);
-				_currentFile = CreateNextFile();
+				_currentFile = NextFile();
 				_currentFile.TransactionSplit(tx);
 			}
 

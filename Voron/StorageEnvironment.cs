@@ -22,7 +22,7 @@ namespace Voron
         private readonly ConcurrentDictionary<string, Tree> _trees
             = new ConcurrentDictionary<string, Tree>(StringComparer.OrdinalIgnoreCase);
 
-        private readonly bool _ownsPager;
+        private readonly bool _ownsDataPager;
         private readonly IVirtualPager _dataPager;
         private readonly SliceComparer _sliceComparer;
 
@@ -39,17 +39,17 @@ namespace Voron
             return new SnapshotReader(NewTransaction(TransactionFlags.Read));
         }
 
-		public StorageEnvironment(IVirtualPager pager, bool ownsPager = true)
+		public StorageEnvironment(IVirtualPager dataPager, Func<string, IVirtualPager> createLogFilePager, bool ownsDataPager = true)
 		{
 			try
 			{
-				_dataPager = pager;
-				_ownsPager = ownsPager;
+				_dataPager = dataPager;
+				_ownsDataPager = ownsDataPager;
 				_sliceComparer = NativeMethods.memcmp;
 				FreeSpaceHandling = new BinaryFreeSpaceStrategy(n => new IntPtr(_dataPager.AcquirePagePointer(n)));
-				_log = new WriteAheadLog(FlushMode.Full);
+				_log = new WriteAheadLog(createLogFilePager, _dataPager);
 
-				Setup(pager);
+				Setup(_log, _dataPager);
 				Root.Name = "Root";
 				
                 Writer = new TransactionMergingWriter(this);
@@ -61,8 +61,9 @@ namespace Voron
             }
         }
 
-        private void Setup(IVirtualPager pager)
+        private void Setup(WriteAheadLog log, IVirtualPager pager)
         {
+			
 	        if (pager.NumberOfAllocatedPages == 0)
             {
                 WriteEmptyHeaderPage(_log.Allocate(null, 0, 1));
@@ -209,7 +210,7 @@ namespace Voron
 				activeTransaction.Value.Dispose();
 			}
 
-			if (_ownsPager)
+			if (_ownsDataPager)
 				_dataPager.Dispose();
 
 			_log.Dispose();
