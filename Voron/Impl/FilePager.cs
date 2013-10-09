@@ -55,6 +55,11 @@ namespace Voron.Impl
 			return PagerState.Base + (pageNumber*PageSize);
 		}
 
+		public override Page GetWritable(long pageNumber)
+		{
+			throw new InvalidOperationException("File pager does not offer writing directly to a page");
+		}
+
 		public override void Flush(long start, long count)
 		{
 			//TODO arek

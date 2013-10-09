@@ -114,10 +114,10 @@ namespace Voron.Impl
                 page = c.GetPage(dirtyPageNum);
 			    
 				if(page == null)
-                    page = _log.GetPage(this, dirtyPageNum);
+                    page = _log.ReadPage(this, dirtyPageNum);
 
 				if (page == null)
-					page = _dataPager.Get(this, dirtyPageNum);
+					page = _dataPager.Read(this, dirtyPageNum);
 
                 page.Dirty = true;
 				
@@ -127,7 +127,7 @@ namespace Voron.Impl
 			}
 			var newPage = AllocatePage(1);
 			var newPageNum = newPage.PageNumber;
-			page = c.GetPage(p) ?? _log.GetPage(this, p) ?? _dataPager.Get(this, p);
+			page = c.GetPage(p) ?? _log.ReadPage(this, p) ?? _dataPager.Read(this, p);
 			NativeMethods.memcpy(newPage.Base, page.Base, _dataPager.PageSize);
 			newPage.LastSearchPosition = page.LastSearchPosition;
 			newPage.LastMatch = page.LastMatch;
@@ -156,7 +156,7 @@ namespace Voron.Impl
 			if (_dirtyPages.TryGetValue(n, out dirtyPage))
 				n = dirtyPage;
 
-			return _log.GetPage(this, n) ?? _dataPager.Get(this, n);
+			return _log.ReadPage(this, n) ?? _dataPager.Read(this, n);
 		}
 
 		private long? TryAllocateFromFreeSpace(int numberOfPages)
@@ -251,7 +251,7 @@ namespace Voron.Impl
 				_env.FreeSpaceHandling.UpdateChecksum(_freeSpaceBuffer.CalculateChecksum());
 			}
 
-			WriteHeader(_id & 1); // this will cycle between the first and second pages
+			WriteHeader((_id & 1) + 1); // this will cycle between the second and third pages
 
 			_log.Flush();
 

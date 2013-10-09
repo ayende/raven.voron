@@ -36,24 +36,29 @@ namespace Voron.Impl
 
         public long NumberOfAllocatedPages { get; protected set; }
 
-        public Page Get(Transaction tx, long pageNumber, bool errorOnChange = false)
+        public Page Read(Transaction tx, long pageNumber)
         {
-            if (pageNumber + 1 > NumberOfAllocatedPages && errorOnChange)
+            if (pageNumber + 1 > NumberOfAllocatedPages)
             {
                 throw new InvalidOperationException("Cannot increase size of the pager when errorOnChange is set to true");
             }
-            EnsureContinuous(tx, pageNumber, 1);
-            return Get(pageNumber);
+            //EnsureContinuous(tx, pageNumber, 1);
+			return new Page(AcquirePagePointer(pageNumber), PageMaxSpace);
         }
+
+		public virtual Page GetWritable(long pageNumber)
+		{
+			if (pageNumber + 1 > NumberOfAllocatedPages)
+			{
+				throw new InvalidOperationException("Cannot get page number " + pageNumber +
+				                                    " because number of allocated pages is " + NumberOfAllocatedPages);
+			}
+
+			return new Page(AcquirePagePointer(pageNumber), PageMaxSpace);
+		}
 
 	    public abstract byte* AcquirePagePointer(long pageNumber);
 	    public abstract void Flush(long startPage, long count);
-
-        protected Page Get(long n)
-        {
-			return new Page(AcquirePagePointer(n), PageMaxSpace);
-        }
-
         public abstract void Sync();
 
         public virtual PagerState TransactionBegan()

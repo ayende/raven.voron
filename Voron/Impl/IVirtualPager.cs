@@ -8,7 +8,7 @@ namespace Voron.Impl
         PagerState PagerState { get; }
 
 		byte* AcquirePagePointer(long pageNumber);
-        Page Get(Transaction tx, long pageNumber, bool errorOnChange = false);
+        Page Read(Transaction tx, long pageNumber);
 		void AllocateMorePages(Transaction tx, long newLength);
 	    void Flush(long startPage, long count);
 
@@ -27,5 +27,6 @@ namespace Voron.Impl
         void EnsureContinuous(Transaction tx, long requestedPageNumber, int pageCount);
         int Write(Page page);
 	    int Write(Page page, long writeToPage);
+	    Page GetWritable(long pageNumber);
     }
 }

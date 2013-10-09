@@ -18,7 +18,7 @@ namespace Voron.Impl.Log
 		private long _writePage;//TODO after restart we need to recover this value
 		private long _lastFlushedPage = -1;
 		private int _allocatedPagesInTransaction = 0;
-		private LogEntryHeader* _currentEntryHeader = null;
+		private TransactionHeader* _currentEntryHeader = null;
 
 		public LogFile(IVirtualPager pager)
 		{
@@ -31,12 +31,21 @@ namespace Voron.Impl.Log
 			get { return _pager; }
 		}
 
+		public IEnumerable<long> Pages
+		{
+			get { return _pageTranslationTable.Keys; }
+		}
+
 		public void TransactionBegin(Transaction tx)
 		{
-			var header = CreateHeader(tx);
-			header->TransactionMarker = TransactionStateMarker.Start;
+			_currentEntryHeader = TransactionHeader();
+
+			_currentEntryHeader->TxId = tx.Id;
+			_currentEntryHeader->NextPageNumber = tx.NextPageNumber;
+			_currentEntryHeader->PageCount = -1;
+			_currentEntryHeader->Crc = 0;
+			_currentEntryHeader->Marker = TransactionMarker.Start;
 			
-			_currentEntryHeader = header;
 			_allocatedPagesInTransaction = 0;
 		}
 
@@ -44,29 +53,46 @@ namespace Voron.Impl.Log
 		{
 			if (_currentEntryHeader != null)
 			{
-				_currentEntryHeader->TransactionMarker |= TransactionStateMarker.Split;
-				_currentEntryHeader->PageCount = _allocatedPagesInTransaction - 1; // minus header page
+				_currentEntryHeader->Marker |= TransactionMarker.Split;
+				_currentEntryHeader->PageCount = _allocatedPagesInTransaction;
 			}
 			else
 			{
-				var header = CreateHeader(tx);
-				header->TransactionMarker = TransactionStateMarker.Split;
-				_currentEntryHeader = header;
+				_currentEntryHeader = TransactionHeader();
+				_currentEntryHeader->Marker = TransactionMarker.Split;
+				_currentEntryHeader->PageCount = -1;
+				_currentEntryHeader->Crc = 0;
 			}
+
+			_currentEntryHeader->TxId = tx.Id;
+			_currentEntryHeader->NextPageNumber = tx.NextPageNumber;
+	
 		}
 
-		public void TransactionCommit()
+		public void TransactionCommit(Transaction tx)
 		{
-			_currentEntryHeader->TransactionMarker |= TransactionStateMarker.Commit;
-			_currentEntryHeader->PageCount = _allocatedPagesInTransaction - 1; // minus header page
+			_currentEntryHeader->TxId = tx.Id;
+			_currentEntryHeader->NextPageNumber = tx.NextPageNumber;
+
+			_currentEntryHeader->Crc = 0; //TODO
+
+			_currentEntryHeader->Marker |= TransactionMarker.End;
+			_currentEntryHeader->PageCount = _allocatedPagesInTransaction;
 		}
 
-		private LogEntryHeader* CreateHeader(Transaction tx)
+		private TransactionHeader* TransactionHeader()
 		{
 			if (_lastFlushedPage != _writePage - 1)
 				_writePage = _lastFlushedPage + 1;
 
-			return (LogEntryHeader*) Allocate(tx, _writePage, 1).Base;
+			var requestedPage = _writePage;
+			var result = (TransactionHeader*) Allocate(_writePage, 1).Base;
+
+			// header page should not be counted as page allocated in transaction
+			_allocatedPagesInTransaction--;
+			_pageTranslationTable.Remove(requestedPage);
+
+			return result;
 		}
 
 		public long AvailablePages
@@ -85,19 +111,19 @@ namespace Voron.Impl.Log
 			_lastFlushedPage += count;
 		}
 
-		public Page GetPage(Transaction tx, long pageNumber)
+		public Page ReadPage(Transaction tx, long pageNumber)
 		{
 			if (_pageTranslationTable.ContainsKey(pageNumber) == false)
 				return null;
 
-			return _pager.Get(tx, _pageTranslationTable[pageNumber]);
+			return _pager.Read(tx, _pageTranslationTable[pageNumber]);
 		}
 
-		public Page Allocate(Transaction tx, long startPage, int numberOfPages)
+		public Page Allocate(long startPage, int numberOfPages)
 		{
 			Debug.Assert(_writePage + numberOfPages <= _pager.NumberOfAllocatedPages);
 
-			var result = _pager.Get(tx, _writePage);
+			var result = _pager.GetWritable(_writePage);
 
 			for (var i = 0; i < numberOfPages; i++)
 			{
