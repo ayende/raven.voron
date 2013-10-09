@@ -49,7 +49,7 @@ namespace Voron.Trees
 
 		public static Tree Create(Transaction tx, SliceComparer cmp, TreeFlags flags = TreeFlags.None)
 		{
-			var newRootPage = NewPage(tx, PageFlags.Leaf, 1);
+			var newRootPage = NewPage(tx, PageFlags.Leaf);
 			var tree = new Tree(cmp, newRootPage.PageNumber)
 				{
 					_state =
@@ -374,9 +374,9 @@ namespace Voron.Trees
 			return p;
 		}
 
-		internal static Page NewPage(Transaction tx, PageFlags flags, int num)
+		internal static Page NewPage(Transaction tx, PageFlags flags)
 		{
-			var page = tx.AllocatePage(num);
+			var page = tx.AllocatePage(1);
 
 			page.Flags = flags;
 

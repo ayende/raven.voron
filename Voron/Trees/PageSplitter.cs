@@ -32,12 +32,12 @@ namespace Voron.Trees
 
         public byte* Execute()
         {
-            var rightPage = Tree.NewPage(_tx, _page.Flags, 1);
+            var rightPage = Tree.NewPage(_tx, _page.Flags);
             _txInfo.RecordNewPage(_page, 1);
             rightPage.Flags = _page.Flags;
             if (_cursor.PageCount == 0) // we need to do a root split
             {
-                var newRootPage = Tree.NewPage(_tx, PageFlags.Branch, 1);
+                var newRootPage = Tree.NewPage(_tx, PageFlags.Branch);
                 _cursor.Push(newRootPage);
                 _txInfo.RootPageNumber = newRootPage.PageNumber;
                 _txInfo.State.Depth++;
