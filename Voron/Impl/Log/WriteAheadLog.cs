@@ -128,14 +128,14 @@ namespace Voron.Impl.Log
 				logFile.Flush(); //TODO need to do it better - no need to flush all log files
 			}
 
-			//ApplyLogsToDataFile();
+			ApplyLogsToDataFile();
 		}
 
 		public void ApplyLogsToDataFile()
 		{
 			var pagesToWrite = new Dictionary<long, Page>();
 
-			for (int i = _logFiles.Count -1; i >= 0; i--)
+			for (int i = _logFiles.Count - 1; i >= 0; i--)
 			{
 				foreach (var pageNumber in _logFiles[i].Pages)
 				{
@@ -146,13 +146,31 @@ namespace Voron.Impl.Log
 				}
 			}
 
-			foreach (var page in pagesToWrite.OrderBy(x => x.Key).Select(x => x.Value))
+			var sortedPages = pagesToWrite.OrderBy(x => x.Key).Select(x => x.Value).ToList();
+
+			var last = sortedPages.LastOrDefault();
+
+			if (last != null)
+			{
+				_dataPager.EnsureContinuous(null, last.PageNumber, 1);
+			}
+
+			foreach (var page in sortedPages)
 			{
 				_dataPager.Write(page);
 			}
 
 			_dataPager.Sync();
 
+			DropLogFiles();
+		}
+
+		private void DropLogFiles()
+		{
+			foreach (var logFile in _logFiles)
+			{
+				logFile.Dispose();
+			}
 
 			_logFiles.Clear();
 			_currentFile = null;
@@ -160,10 +178,7 @@ namespace Voron.Impl.Log
 
 		public void Dispose()
 		{
-			foreach (var logFile in _logFiles)
-			{
-				logFile.Dispose();
-			}
+			DropLogFiles();
 		}
 	}
 }

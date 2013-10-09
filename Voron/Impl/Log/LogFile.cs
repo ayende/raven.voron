@@ -125,13 +125,14 @@ namespace Voron.Impl.Log
 
 			var result = _pager.GetWritable(_writePage);
 
-			for (var i = 0; i < numberOfPages; i++)
-			{
-				_pageTranslationTable[startPage + i] = _writePage;
-				_writePage++;
-			}
+			// we allocate more than one page only if the page is an overflow
+			// so here we don't want to create mapping for them too
+			_pageTranslationTable[startPage] = _writePage;
+			
+			// but we need to move the index
+			_writePage += numberOfPages;
 
-			_allocatedPagesInTransaction += numberOfPages;
+			_allocatedPagesInTransaction++;
 
 			return result;
 		}
