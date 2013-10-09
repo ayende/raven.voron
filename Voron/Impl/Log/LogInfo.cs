@@ -14,7 +14,10 @@ namespace Voron.Impl.Log
 		[FieldOffset(0)] 
 		public long RecentLog;
 
-		[FieldOffset(0)]
+		[FieldOffset(8)]
 		public int LogFilesCount;
+
+		[FieldOffset(12)] 
+		public long LastFlushedPage;
 	}
 }

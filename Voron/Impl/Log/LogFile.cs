@@ -26,10 +26,7 @@ namespace Voron.Impl.Log
 			_writePage = 0;
 		}
 
-		public IVirtualPager Pager
-		{
-			get { return _pager; }
-		}
+		public event Action EndOfLog = () => { };
 
 		public IEnumerable<long> Pages
 		{
@@ -85,12 +82,7 @@ namespace Voron.Impl.Log
 			if (_lastFlushedPage != _writePage - 1)
 				_writePage = _lastFlushedPage + 1;
 
-			var requestedPage = _writePage;
-			var result = (TransactionHeader*) Allocate(_writePage, 1).Base;
-
-			// header page should not be counted as page allocated in transaction
-			_allocatedPagesInTransaction--;
-			_pageTranslationTable.Remove(requestedPage);
+			var result = (TransactionHeader*) Allocate(-1, 1).Base;
 
 			return result;
 		}
@@ -109,6 +101,9 @@ namespace Voron.Impl.Log
 			_pager.Sync();
 
 			_lastFlushedPage += count;
+
+			if (AvailablePages <= 1)
+				EndOfLog();
 		}
 
 		public Page ReadPage(Transaction tx, long pageNumber)
@@ -125,14 +120,16 @@ namespace Voron.Impl.Log
 
 			var result = _pager.GetWritable(_writePage);
 
-			// we allocate more than one page only if the page is an overflow
-			// so here we don't want to create mapping for them too
-			_pageTranslationTable[startPage] = _writePage;
-			
-			// but we need to move the index
-			_writePage += numberOfPages;
+			if (startPage != -1) // internal use - transaction header allocation
+			{
+				// we allocate more than one page only if the page is an overflow
+				// so here we don't want to create mapping for them too
+				_pageTranslationTable[startPage] = _writePage;
 
-			_allocatedPagesInTransaction++;
+				_allocatedPagesInTransaction++;
+			}
+
+			_writePage += numberOfPages;
 
 			return result;
 		}

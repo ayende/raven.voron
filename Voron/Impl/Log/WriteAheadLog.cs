@@ -18,6 +18,7 @@ namespace Voron.Impl.Log
 		private long _currentLogNumber = -1;
 		private LogFile _currentFile;
 		private readonly List<LogFile> _logFiles = new List<LogFile>();
+		private readonly Func<long, string> _logName = number => string.Format("{0:D19}.txlog", number);
 
 		public WriteAheadLog(Func<string, IVirtualPager> createLogFilePager, IVirtualPager dataPager)
 		{
@@ -34,16 +35,22 @@ namespace Voron.Impl.Log
 		{
 			_currentLogNumber++;
 
-			var logPager = _createLogFilePager(string.Format("{0:D19}.txlog", _currentLogNumber));
+			var logPager = _createLogFilePager(_logName(_currentLogNumber));
 			logPager.AllocateMorePages(null, LogFileSize);
 
 			var log = new LogFile(logPager);
-			
+			log.EndOfLog += EndOfFileLogHandling;
+
 			_logFiles.Add(log);
 
-			WriteLogInfo();
+			WriteLogInfoPage();
 
 			return log;
+		}
+
+		private void EndOfFileLogHandling()
+		{
+			ApplyLogsToDataFile();
 		}
 
 		public void Recover()
@@ -52,7 +59,7 @@ namespace Voron.Impl.Log
 
 			for (var logNumber = info->RecentLog - info->LogFilesCount + 1; logNumber <= info->RecentLog; logNumber++)
 			{
-				var log = new LogFile(_createLogFilePager(string.Format("{0:D19}.txlog", logNumber)));
+				var log = new LogFile(_createLogFilePager(_logName(logNumber)));
 
 				_logFiles.Add(log);
 			}
@@ -70,7 +77,7 @@ namespace Voron.Impl.Log
 			return logInfo;
 		}
 
-		private void WriteLogInfo()
+		private void WriteLogInfoPage()
 		{
 			var logInfoPage = _dataPager.TempPage; //TODO can we take advantage of temp page here? needs to be verified
 			logInfoPage.PageNumber = 0;
@@ -80,7 +87,6 @@ namespace Voron.Impl.Log
 			logInfo->LogFilesCount = _logFiles.Count;
 
 			_dataPager.Write(logInfoPage);
-			_dataPager.Flush(0, 1);
 			_dataPager.Sync();
 		}
 
@@ -127,8 +133,6 @@ namespace Voron.Impl.Log
 			{
 				logFile.Flush(); //TODO need to do it better - no need to flush all log files
 			}
-
-			ApplyLogsToDataFile();
 		}
 
 		public void ApplyLogsToDataFile()
@@ -169,6 +173,7 @@ namespace Voron.Impl.Log
 		{
 			foreach (var logFile in _logFiles)
 			{
+				logFile.EndOfLog -= EndOfFileLogHandling;
 				logFile.Dispose();
 			}
 
