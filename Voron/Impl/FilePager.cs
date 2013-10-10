@@ -36,7 +36,7 @@ namespace Voron.Impl
 			}   
 
 			_fileHandle = safeHandle.DangerousGetHandle();
-			_fileStream = new FileStream(safeHandle, FileAccess.Read);
+			_fileStream = new FileStream(safeHandle, FileAccess.ReadWrite);
 
 			if (noData)
 			{
@@ -74,7 +74,7 @@ namespace Voron.Impl
 		        return;
 
 			// need to allocate memory again
-			NativeFileMethods.SetFileLength(_fileHandle, newLength);
+			_fileStream.SetLength(newLength);
 
 			PagerState.Release(); // when the last transaction using this is over, will dispose it
 			PagerState newPager = CreateNewPagerState();
@@ -120,7 +120,7 @@ namespace Voron.Impl
 		public override void Sync()
 		{
 			if (_flushMode == FlushMode.Full)
-				NativeFileMethods.FlushFileBuffers(_fileHandle);
+				_fileStream.Flush(true);
 		}
 
 		public override int Write(Page page, long writeToPage)
@@ -161,7 +161,6 @@ namespace Voron.Impl
 				PagerState.Release();
 				PagerState = null;
 			}
-		    NativeFileMethods.CloseHandle(_fileHandle);
 			_fileStream.Dispose();
 		}
 	}
