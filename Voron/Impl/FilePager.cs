@@ -123,11 +123,11 @@ namespace Voron.Impl
 				_fileStream.Flush(true);
 		}
 
-		public override int Write(Page page, long writeToPage)
+		public override int Write(Page page)
 		{
 			uint written;
 
-			var position = writeToPage * PageSize;
+			var position = page.PageNumber * PageSize;
 
 			var nativeOverlapped = new NativeOverlapped()
 			{
@@ -146,11 +146,6 @@ namespace Voron.Impl
 			Debug.Assert(toWrite == written);
 
 			return toWrite;
-		}
-
-		public override int  Write(Page page)
-		{
-			return Write(page, page.PageNumber);
 		}
 
 	    public override void Dispose()

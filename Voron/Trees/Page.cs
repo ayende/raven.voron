@@ -392,5 +392,15 @@ namespace Voron.Trees
                 prev = current;
             }
         }
+
+		public static int GetNumberOfOverflowPages(int pageSize, int overflowSize)
+		{
+			return (pageSize - 1 + overflowSize) / (pageSize) + 1;
+		}
+
+		public static bool ShouldGoToOverflowPage(int maxNodeSize, int len)
+		{
+			return len + Constants.PageHeaderSize > maxNodeSize;
+		}
     }
 }

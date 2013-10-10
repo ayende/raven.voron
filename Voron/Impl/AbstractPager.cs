@@ -99,7 +99,6 @@ namespace Voron.Impl
         }
 
         public abstract int Write(Page page);
-	    public abstract int Write(Page page, long writeToPage);
 
         public void EnsureFreeSpaceTrackingHasEnoughSpace(Transaction tx, int pageCount)
 		{

@@ -51,11 +51,6 @@ namespace Voron.Impl
 		    return toWrite;
 	    }
 
-		public override unsafe int Write(Page page, long writeToPage)
-		{
-			throw new NotImplementedException();
-		}
-
 		public override void Dispose()
 		{
             base.Dispose();

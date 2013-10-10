@@ -200,7 +200,7 @@ namespace Voron.Trees
 				var lastSearchPosition = page.LastSearchPosition; // searching for overflow pages might change this
 				byte* overFlowPos = null;
 				var pageNumber = -1L;
-				if (ShouldGoToOverflowPage(tx, len))
+				if (Page.ShouldGoToOverflowPage(tx.PagerInfo.MaxNodeSize, len))
 				{
 					pageNumber = WriteToOverflowPages(tx, txInfo, len, out overFlowPos);
 					len = -1;
@@ -251,7 +251,7 @@ namespace Voron.Trees
 
 		private long WriteToOverflowPages(Transaction tx, TreeDataInTransaction txInfo, int overflowSize, out byte* dataPos)
 		{
-			var numberOfPages = GetNumberOfOverflowPages(tx, overflowSize);
+			var numberOfPages = Page.GetNumberOfOverflowPages(tx.PagerInfo.PageSize, overflowSize);
 			var overflowPageStart = tx.AllocatePage(numberOfPages);
 			overflowPageStart.Flags = PageFlags.Overflow;
 			overflowPageStart.OverflowSize = overflowSize;
@@ -261,15 +261,7 @@ namespace Voron.Trees
 			return overflowPageStart.PageNumber;
 		}
 
-		private int GetNumberOfOverflowPages(Transaction tx, int overflowSize)
-		{
-			return (tx.Environment.PageSize - 1 + overflowSize) / (tx.Environment.PageSize) + 1;
-		}
-
-		private bool ShouldGoToOverflowPage(Transaction tx, int len)
-		{
-			return len + Constants.PageHeaderSize > tx.PagerInfo.MaxNodeSize;
-		}
+		
 
 		private void RemoveLeafNode(Transaction tx, Cursor cursor, Page page, out ushort nodeVersion)
 		{
@@ -278,7 +270,7 @@ namespace Voron.Trees
 			if (node->Flags == (NodeFlags.PageRef)) // this is an overflow pointer
 			{
 				var overflowPage = tx.GetReadOnlyPage(node->PageNumber);
-				var numberOfPages = GetNumberOfOverflowPages(tx, overflowPage.OverflowSize);
+				var numberOfPages = Page.GetNumberOfOverflowPages(tx.PagerInfo.PageSize, overflowPage.OverflowSize);
 				
 				//TODO arek, might be a reason to do int in a reversed order
 				for (int i = 0; i < numberOfPages; i++)
@@ -551,7 +543,7 @@ namespace Voron.Trees
 					{
 						// This is an overflow page
 						var overflowPage = tx.GetReadOnlyPage(pageNumber);
-						var numberOfPages = GetNumberOfOverflowPages(tx, overflowPage.OverflowSize);
+						var numberOfPages = Page.GetNumberOfOverflowPages(tx.PagerInfo.PageSize, overflowPage.OverflowSize);
 						for (long j = 0; j < numberOfPages; ++j)
 							results.Add(overflowPage.PageNumber + j);
 					}

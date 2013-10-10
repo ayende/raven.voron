@@ -87,20 +87,17 @@ namespace Voron.Impl
 				_fileStream.Flush(true);
 		}
 
-		public override int Write(Page page, long writeToPage)
+		public override int Write(Page page)
 		{
-			var position = writeToPage * PageSize;
+			var position = page.PageNumber * PageSize;
 
 			var toWrite = page.IsOverflow ? page.OverflowSize : PageSize;
 
 			NativeMethods.memcpy(PagerState.Base + position, page.Base, toWrite);
 
-			return toWrite;
-		}
+			Flush(page.PageNumber, page.IsOverflow ? Page.GetNumberOfOverflowPages(PageSize, toWrite) : 1);
 
-		public override int Write(Page page)
-		{
-			return Write(page, page.PageNumber);
+			return toWrite;
 		}
 
 		public override void Flush(long startPage, long count)

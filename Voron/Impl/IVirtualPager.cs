@@ -26,7 +26,6 @@ namespace Voron.Impl
 
         void EnsureContinuous(Transaction tx, long requestedPageNumber, int pageCount);
         int Write(Page page);
-	    int Write(Page page, long writeToPage);
 	    Page GetWritable(long pageNumber);
     }
 }
