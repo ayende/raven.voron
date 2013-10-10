@@ -158,7 +158,7 @@ namespace Voron.Trees
 
             var fromNode = from.GetNode(from.LastSearchPosition);
             long pageNum = fromNode->PageNumber;
-            var itemsMoved = _tx.Pager.Read(_tx, pageNum).ItemCount;
+            var itemsMoved = _tx.GetReadOnlyPage(pageNum).ItemCount;
             from.ItemCount -= itemsMoved;
             to.ItemCount += itemsMoved;
 
