@@ -251,6 +251,7 @@ namespace Voron.Impl
 				_env.FreeSpaceHandling.UpdateChecksum(_freeSpaceBuffer.CalculateChecksum());
 			}
 
+			_log.TransactionCommit(this);
 			_log.Flush();
 
 			Committed = true;
