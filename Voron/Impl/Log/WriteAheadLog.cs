@@ -184,12 +184,17 @@ namespace Voron.Impl.Log
 
 			WriteFileHeader();
 
+			for (int i = 0; i < _logFiles.Count -1; i++)
+			{
+				_logFiles[i].Dispose();
+			}
 			_logFiles.RemoveRange(0, _logFiles.Count - 1);
 
-			Debug.Assert( _logFiles.Count == 1 && _currentFile == _logFiles.Last());
+			Debug.Assert(_logFiles.Count == 1 && _currentFile == _logFiles.Last());
 
 			if (_currentFile.AvailablePages < 2)
 			{
+				_currentFile.Dispose();
 				_logFiles.Clear();
 				_currentFile = null;
 			}
