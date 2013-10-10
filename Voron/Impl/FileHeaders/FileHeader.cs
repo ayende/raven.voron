@@ -1,4 +1,5 @@
 ﻿using System.Runtime.InteropServices;
+using Voron.Impl.Log;
 
 namespace Voron.Impl.FileHeaders
 {
@@ -17,7 +18,7 @@ namespace Voron.Impl.FileHeaders
         [FieldOffset(8)]
         public int Version;
         /// <summary>
-        /// The transaction id that commited this page
+        /// The transaction id that committed this page
         /// </summary>
         [FieldOffset(12)]
         public long TransactionId;

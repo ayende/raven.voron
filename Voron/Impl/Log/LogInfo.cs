@@ -11,13 +11,13 @@ namespace Voron.Impl.Log
 	[StructLayout(LayoutKind.Explicit, Pack = 1)]
 	public struct LogInfo
 	{
-		[FieldOffset(0)] 
+		[FieldOffset(0)]
 		public long RecentLog;
 
 		[FieldOffset(8)]
 		public int LogFilesCount;
 
-		[FieldOffset(12)] 
-		public long LastFlushedPage;
+		[FieldOffset(16)]
+		public long LastFlushedPageFromRecentLog;
 	}
 }

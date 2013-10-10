@@ -251,8 +251,6 @@ namespace Voron.Impl
 				_env.FreeSpaceHandling.UpdateChecksum(_freeSpaceBuffer.CalculateChecksum());
 			}
 
-			WriteHeader((_id & 1) + 1); // this will cycle between the second and third pages
-
 			_log.Flush();
 
 			Committed = true;
@@ -281,26 +279,6 @@ namespace Voron.Impl
 
 				parentTree.SetAsMultiValueTreeRef(this, key);
 			}
-		}
-
-		private unsafe void WriteHeader(long pageNumber)
-		{
-			if(_env.Root == null)
-				return;
-			
-			var page = _log.Allocate(this, pageNumber, 1);
-			page.PageNumber = pageNumber;
-
-			var fileHeader = ((FileHeader*)page.Base + Constants.PageHeaderSize);
-
-			fileHeader->MagicMarker = Constants.MagicMarker;
-			fileHeader->Version = Constants.CurrentVersion;
-			fileHeader->TransactionId = _id;
-			fileHeader->LastPageNumber = NextPageNumber - 1;
-			_env.FreeSpaceHandling.CopyStateTo(&fileHeader->FreeSpace);
-			_env.Root.State.CopyTo(&fileHeader->Root);
-
-			_dirtyPages[pageNumber] = pageNumber;
 		}
 
 		public void Dispose()

@@ -6,13 +6,16 @@
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
+using Voron.Impl.FileHeaders;
 using Voron.Trees;
 
 namespace Voron.Impl.Log
 {
 	public unsafe class WriteAheadLog : IDisposable
 	{
+		private readonly StorageEnvironment _env;
 		private readonly Func<string, IVirtualPager> _createLogFilePager;
 		private readonly IVirtualPager _dataPager;
 		private long _currentLogNumber = -1;
@@ -20,8 +23,9 @@ namespace Voron.Impl.Log
 		private readonly List<LogFile> _logFiles = new List<LogFile>();
 		private readonly Func<long, string> _logName = number => string.Format("{0:D19}.txlog", number);
 
-		public WriteAheadLog(Func<string, IVirtualPager> createLogFilePager, IVirtualPager dataPager)
+		public WriteAheadLog(StorageEnvironment env, Func<string, IVirtualPager> createLogFilePager, IVirtualPager dataPager)
 		{
+			_env = env;
 			_createLogFilePager = createLogFilePager;
 			_dataPager = dataPager;
 		}
@@ -38,19 +42,13 @@ namespace Voron.Impl.Log
 			var logPager = _createLogFilePager(_logName(_currentLogNumber));
 			logPager.AllocateMorePages(null, LogFileSize);
 
-			var log = new LogFile(logPager);
-			log.EndOfLog += EndOfFileLogHandling;
+			var log = new LogFile(logPager, _currentLogNumber);
 
 			_logFiles.Add(log);
 
-			WriteLogInfoPage();
+			WriteLogState();
 
 			return log;
-		}
-
-		private void EndOfFileLogHandling()
-		{
-			ApplyLogsToDataFile();
 		}
 
 		public void Recover()
@@ -59,7 +57,7 @@ namespace Voron.Impl.Log
 
 			for (var logNumber = info->RecentLog - info->LogFilesCount + 1; logNumber <= info->RecentLog; logNumber++)
 			{
-				var log = new LogFile(_createLogFilePager(_logName(logNumber)));
+				var log = new LogFile(_createLogFilePager(_logName(logNumber)), logNumber);
 
 				_logFiles.Add(log);
 			}
@@ -77,16 +75,34 @@ namespace Voron.Impl.Log
 			return logInfo;
 		}
 
-		private void WriteLogInfoPage()
+		public void WriteLogState(long pageNumber = 0)
 		{
-			var logInfoPage = _dataPager.TempPage; //TODO can we take advantage of temp page here? needs to be verified
-			logInfoPage.PageNumber = 0;
+			var logInfoPage = _dataPager.TempPage;
+			logInfoPage.PageNumber = pageNumber;
 			var logInfo = (LogInfo*) logInfoPage.Base + Constants.PageHeaderSize;
 
 			logInfo->RecentLog = _currentLogNumber;
 			logInfo->LogFilesCount = _logFiles.Count;
 
 			_dataPager.Write(logInfoPage);
+			_dataPager.Sync();
+		}
+
+		public void WriteFileHeader()
+		{
+			var fileHeaderPage = _dataPager.TempPage;
+			fileHeaderPage.PageNumber = 1;// TODO 
+
+			var fileHeader = ((FileHeader*)fileHeaderPage.Base + Constants.PageHeaderSize);
+
+			fileHeader->MagicMarker = Constants.MagicMarker;
+			fileHeader->Version = Constants.CurrentVersion;
+			fileHeader->TransactionId = _currentFile.LastCommittedTransactionId;
+			fileHeader->LastPageNumber = _currentFile.LastPageNumberOfCommittedTransaction;
+			_env.FreeSpaceHandling.CopyStateTo(&fileHeader->FreeSpace);
+			_env.Root.State.CopyTo(&fileHeader->Root);
+
+			_dataPager.Write(fileHeaderPage);
 			_dataPager.Sync();
 		}
 
@@ -164,6 +180,8 @@ namespace Voron.Impl.Log
 				_dataPager.Write(page);
 			}
 
+			WriteFileHeader();
+
 			_dataPager.Sync();
 
 			DropLogFiles();
@@ -173,7 +191,6 @@ namespace Voron.Impl.Log
 		{
 			foreach (var logFile in _logFiles)
 			{
-				logFile.EndOfLog -= EndOfFileLogHandling;
 				logFile.Dispose();
 			}
 

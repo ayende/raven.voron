@@ -5,6 +5,7 @@
 // -----------------------------------------------------------------------
 
 using System.Runtime.InteropServices;
+using Voron.Impl.FileHeaders;
 
 namespace Voron.Impl.Log
 {
@@ -18,12 +19,18 @@ namespace Voron.Impl.Log
 		public long NextPageNumber;
 
 		[FieldOffset(16)]
+		public long LastPageNumber;
+
+		[FieldOffset(24)]
 		public int PageCount;
 
-		[FieldOffset(20)]
+		[FieldOffset(28)]
 		public uint Crc;
 
-		[FieldOffset(24)] 
+		[FieldOffset(32)] 
 		public TransactionMarker Marker;
+
+		[FieldOffset(36)]
+		public TreeRootHeader Root;
 	}
 }

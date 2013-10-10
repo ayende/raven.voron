@@ -48,7 +48,7 @@ namespace Voron
 				_sliceComparer = NativeMethods.memcmp;
 				FreeSpaceHandling = new BinaryFreeSpaceStrategy(n => new IntPtr(_dataPager.AcquirePagePointer(n)));
 
-				_log = new WriteAheadLog(createLogFilePager, _dataPager);
+				_log = new WriteAheadLog(this, createLogFilePager, _dataPager);
 				
 				Setup();
 
@@ -68,8 +68,11 @@ namespace Voron
 			
 	        if (_dataPager.NumberOfAllocatedPages == 0)
             {
-				//WriteEmptyHeaderPage(_log.Allocate(null, 0, 1));
-				//WriteEmptyHeaderPage(_log.Allocate(null, 1, 1));
+				_dataPager.EnsureContinuous(null, 3, 1); // allocate 3 pages for log info and 2 environment headers
+
+				_log.WriteLogState(0);
+				WriteEmptyHeaderPage(1);
+				WriteEmptyHeaderPage(2);
 
 				//var freeSpaceHeader = new FreeSpaceHeader
 				//	{
@@ -220,9 +223,12 @@ namespace Voron
 			_log.Dispose();
 		}
 
-        private void WriteEmptyHeaderPage(Page page)
+        private void WriteEmptyHeaderPage(long pageNumber)
         {
-			var fileHeader = ((FileHeader*)page.Base);
+	        var page = _dataPager.TempPage;
+	        page.PageNumber = pageNumber;
+
+	        var fileHeader = ((FileHeader*)page.Base + Constants.PageHeaderSize);
 			fileHeader->MagicMarker = Constants.MagicMarker;
 			fileHeader->Version = Constants.CurrentVersion;
 			fileHeader->TransactionId = 0;
@@ -234,7 +240,10 @@ namespace Voron
 			fileHeader->FreeSpace.PageSize = -1;
 			fileHeader->FreeSpace.Checksum = 0;
 			fileHeader->Root.RootPageNumber = -1;
-		}
+
+	        _dataPager.Write(page);
+			_dataPager.Sync();
+        }
 
         private FileHeader* FindLatestFileHeadeEntry()
         {
@@ -339,8 +348,21 @@ namespace Voron
             finally
             {
                 _txWriter.Release();
-
             }
+
+			//TODO temp solution - need to do it better
+			if (_txWriter.CurrentCount > 0) 
+			{
+				_txWriter.Wait();
+				try
+				{
+					_log.ApplyLogsToDataFile();
+				}
+				finally 
+				{
+					_txWriter.Release();
+				}
+			}
         }
 
         public void Backup(Stream output)
