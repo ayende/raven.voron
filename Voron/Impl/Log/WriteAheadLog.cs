@@ -81,7 +81,7 @@ namespace Voron.Impl.Log
 			logInfoPage.PageNumber = pageNumber;
 			var logInfo = (LogInfo*) logInfoPage.Base + Constants.PageHeaderSize;
 
-			logInfo->RecentLog = _currentLogNumber;
+			logInfo->RecentLog = _currentFile != null ? _currentFile.Number : -1;
 			logInfo->LogFilesCount = _logFiles.Count;
 
 			_dataPager.Write(logInfoPage);
@@ -180,14 +180,24 @@ namespace Voron.Impl.Log
 				_dataPager.Write(page);
 			}
 
-			WriteFileHeader();
-
 			_dataPager.Sync();
 
-			DropLogFiles();
+			WriteFileHeader();
+
+			_logFiles.RemoveRange(0, _logFiles.Count - 1);
+
+			Debug.Assert( _logFiles.Count == 1 && _currentFile == _logFiles.Last());
+
+			if (_currentFile.AvailablePages < 2)
+			{
+				_logFiles.Clear();
+				_currentFile = null;
+			}
+
+			WriteLogState();
 		}
 
-		private void DropLogFiles()
+		public void Dispose()
 		{
 			foreach (var logFile in _logFiles)
 			{
@@ -195,12 +205,6 @@ namespace Voron.Impl.Log
 			}
 
 			_logFiles.Clear();
-			_currentFile = null;
-		}
-
-		public void Dispose()
-		{
-			DropLogFiles();
 		}
 	}
 }
