@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Linq;
 using Voron.Impl.FileHeaders;
 using Voron.Impl.FreeSpace;
 using Voron.Impl.Log;
@@ -63,10 +62,7 @@ namespace Voron.Impl
 			get { return _freeSpaceBuffer; }
 		}
 
-		public IVirtualPager Pager
-		{
-			get { return _dataPager; }
-		}
+		public PagerInfo PagerInfo { get; private set; }
 
 		public Transaction(WriteAheadLog log, IVirtualPager dataPager, StorageEnvironment env, long id, TransactionFlags flags, UnmanagedBits freeSpaceBuffer)
 		{
@@ -77,6 +73,13 @@ namespace Voron.Impl
 			_freeSpaceBuffer = freeSpaceBuffer;
 			Flags = flags;
 			NextPageNumber = env.NextPageNumber;
+			PagerInfo = new PagerInfo()
+				{
+					MaxNodeSize = _dataPager.MaxNodeSize,
+					PageMaxSpace = _dataPager.PageMaxSpace,
+					PageMinSpace = _dataPager.PageMinSpace,
+					PageSize = _dataPager.PageSize
+				};
 
 			if(flags == TransactionFlags.ReadWrite)
 				_log.TransactionBegin(this);

@@ -57,6 +57,7 @@
     <Compile Include="Impl\Log\LogInfo.cs" />
     <Compile Include="Impl\Log\TransactionMarker.cs" />
     <Compile Include="Impl\Log\WriteAheadLog.cs" />
+    <Compile Include="Impl\PagerInfo.cs" />
     <Compile Include="Util\MathUtils.cs" />
     <Compile Include="Impl\IVirtualPager.cs" />
     <Compile Include="Impl\FilePager.cs" />

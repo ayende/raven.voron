@@ -191,8 +191,8 @@ namespace Voron.Trees
         private int AdjustSplitPosition(Slice key, int len, Page page, int currentIndex, int splitIndex,
                                                       ref bool newPosition)
         {
-            var nodeSize = SizeOf.NodeEntry(_tx.Pager.PageMaxSpace, key, len) + Constants.NodeOffsetSize;
-			if (page.NumberOfEntries >= 20 && nodeSize <= _tx.Pager.PageMaxSpace / 16)
+            var nodeSize = SizeOf.NodeEntry(_tx.PagerInfo.PageMaxSpace, key, len) + Constants.NodeOffsetSize;
+			if (page.NumberOfEntries >= 20 && nodeSize <= _tx.PagerInfo.PageMaxSpace / 16)
             {
                 return splitIndex;
             }
@@ -206,7 +206,7 @@ namespace Voron.Trees
                     var node = page.GetNode(i);
                     pageSize += node->GetNodeSize();
                     pageSize += pageSize & 1;
-					if (pageSize > _tx.Pager.PageMaxSpace)
+					if (pageSize > _tx.PagerInfo.PageMaxSpace)
                     {
                         if (i <= currentIndex)
                         {
@@ -225,7 +225,7 @@ namespace Voron.Trees
                     var node = page.GetNode(i);
                     pageSize += node->GetNodeSize();
                     pageSize += pageSize & 1;
-					if (pageSize > _tx.Pager.PageMaxSpace)
+					if (pageSize > _tx.PagerInfo.PageMaxSpace)
                     {
                         if (i >= currentIndex)
                         {

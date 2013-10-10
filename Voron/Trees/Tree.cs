@@ -122,8 +122,8 @@ namespace Voron.Trees
 		public void MultiAdd(Transaction tx, Slice key, Slice value, ushort? version = null)
 		{
 			if (value == null) throw new ArgumentNullException("value");
-			if (value.Size > tx.Pager.MaxNodeSize)
-				throw new ArgumentException("Cannot add a value to child tree that is over " + tx.Pager.MaxNodeSize + " bytes in size", "value");
+			if (value.Size > tx.PagerInfo.MaxNodeSize)
+				throw new ArgumentException("Cannot add a value to child tree that is over " + tx.PagerInfo.MaxNodeSize + " bytes in size", "value");
 			if (value.Size == 0)
 				throw new ArgumentException("Cannot add empty value to child tree");
 
@@ -174,8 +174,8 @@ namespace Voron.Trees
 			if (tx.Flags == (TransactionFlags.ReadWrite) == false)
 				throw new ArgumentException("Cannot add a value in a read only transaction");
 
-			if (key.Size > tx.Pager.MaxNodeSize)
-				throw new ArgumentException("Key size is too big, must be at most " + tx.Pager.MaxNodeSize + " bytes, but was " + key.Size, "key");
+			if (key.Size > tx.PagerInfo.MaxNodeSize)
+				throw new ArgumentException("Key size is too big, must be at most " + tx.PagerInfo.MaxNodeSize + " bytes, but was " + key.Size, "key");
 
 			using (var cursor = tx.NewCursor(this))
 			{
@@ -268,7 +268,7 @@ namespace Voron.Trees
 
 		private bool ShouldGoToOverflowPage(Transaction tx, int len)
 		{
-			return len + Constants.PageHeaderSize > tx.Pager.MaxNodeSize;
+			return len + Constants.PageHeaderSize > tx.PagerInfo.MaxNodeSize;
 		}
 
 		private void RemoveLeafNode(Transaction tx, Cursor cursor, Page page, out ushort nodeVersion)

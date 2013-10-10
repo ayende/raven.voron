@@ -339,54 +339,54 @@ namespace Voron.Tests.Impl.Free
 			Assert.Equal(2, Env.Stats().FreePages);
 		}
 
-		[Fact]
-		public void FreeSpaceBufferOfAbortedTransactionShouldBeRecovered()
-		{
-            if(Environment.Is64BitProcess == false)
-                throw new NotSupportedException("This test can only pass is 64 bits");
-			using (var tx = Env.NewTransaction(TransactionFlags.ReadWrite))
-			{
-				tx.Pager.AllocateMorePages(tx, 1024 * 1024 * 5);
-				tx.Pager.EnsureContinuous(tx, 800000, 1);
-				tx.Commit();
-			}
+		//[Fact] TODO arek
+		//public void FreeSpaceBufferOfAbortedTransactionShouldBeRecovered()
+		//{
+		//	if(Environment.Is64BitProcess == false)
+		//		throw new NotSupportedException("This test can only pass is 64 bits");
+		//	using (var tx = Env.NewTransaction(TransactionFlags.ReadWrite))
+		//	{
+		//		tx.Pager.AllocateMorePages(tx, 1024 * 1024 * 5);
+		//		tx.Pager.EnsureContinuous(tx, 800000, 1);
+		//		tx.Commit();
+		//	}
 
-			using (var tx1 = Env.NewTransaction(TransactionFlags.ReadWrite))
-			{
-				tx1.FreePage(100);
-				tx1.FreePage(80000);
-				tx1.FreePage(80001);
-				tx1.FreePage(80002);
-				tx1.FreePage(80003);
-				tx1.Commit();
-			}
+		//	using (var tx1 = Env.NewTransaction(TransactionFlags.ReadWrite))
+		//	{
+		//		tx1.FreePage(100);
+		//		tx1.FreePage(80000);
+		//		tx1.FreePage(80001);
+		//		tx1.FreePage(80002);
+		//		tx1.FreePage(80003);
+		//		tx1.Commit();
+		//	}
 
-			UnmanagedBits bufferOfTx2;
+		//	UnmanagedBits bufferOfTx2;
 
-			using (var tx2 = Env.NewTransaction(TransactionFlags.ReadWrite))
-			{
-				bufferOfTx2 = tx2.FreeSpaceBuffer;
+		//	using (var tx2 = Env.NewTransaction(TransactionFlags.ReadWrite))
+		//	{
+		//		bufferOfTx2 = tx2.FreeSpaceBuffer;
 
-				var find = tx2.FreeSpaceBuffer.Find(4);
-				Assert.Equal(80000, find); // it would mark pages as busy
+		//		var find = tx2.FreeSpaceBuffer.Find(4);
+		//		Assert.Equal(80000, find); // it would mark pages as busy
 				
-				// do not commit - aborted transaction
-			}
+		//		// do not commit - aborted transaction
+		//	}
 
-			using (var tx3 = Env.NewTransaction(TransactionFlags.ReadWrite))
-			{
-				// this transaction will get the same id as the previous one because it was aborted
-				// so here we should get the recovered buffer
+		//	using (var tx3 = Env.NewTransaction(TransactionFlags.ReadWrite))
+		//	{
+		//		// this transaction will get the same id as the previous one because it was aborted
+		//		// so here we should get the recovered buffer
 
-				Assert.Same(bufferOfTx2, tx3.FreeSpaceBuffer);
+		//		Assert.Same(bufferOfTx2, tx3.FreeSpaceBuffer);
 
-				Assert.True(tx3.FreeSpaceBuffer.IsFree(100));
-				Assert.True(tx3.FreeSpaceBuffer.IsFree(80000));
-				Assert.True(tx3.FreeSpaceBuffer.IsFree(80001));
-				Assert.True(tx3.FreeSpaceBuffer.IsFree(80002));
-				Assert.True(tx3.FreeSpaceBuffer.IsFree(80003));
-				tx3.Commit();
-			}
-		}
+		//		Assert.True(tx3.FreeSpaceBuffer.IsFree(100));
+		//		Assert.True(tx3.FreeSpaceBuffer.IsFree(80000));
+		//		Assert.True(tx3.FreeSpaceBuffer.IsFree(80001));
+		//		Assert.True(tx3.FreeSpaceBuffer.IsFree(80002));
+		//		Assert.True(tx3.FreeSpaceBuffer.IsFree(80003));
+		//		tx3.Commit();
+		//	}
+		//}
 	}
 }
