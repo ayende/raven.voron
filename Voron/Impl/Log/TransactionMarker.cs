@@ -11,8 +11,9 @@ namespace Voron.Impl.Log
 	[Flags]
 	public enum TransactionMarker : uint
 	{
-		Start = 0,
-		Split = 2,
-		End = 4,
+		None = 0x0,
+		Start = 0x1,
+		Split = 0x2,
+		End = 0x4,
 	}
 }
