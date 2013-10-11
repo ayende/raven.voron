@@ -15,8 +15,9 @@ namespace Voron.Impl.Log
 	{
 		private readonly IVirtualPager _pager;
 		private readonly Dictionary<long, long> _pageTranslationTable = new Dictionary<long, long>(); // TODO after restart we need to recover those values
-		private long _writePage;//TODO after restart we need to recover this value
-		private long _lastFlushedPage = -1;
+		private long _writePage = 0;//TODO after restart we need to recover this value
+		private long _lastSyncedPage = -1;
+		private long _readingPage = 0;
 		private int _allocatedPagesInTransaction = 0;
 		private TransactionHeader* _currentTxHeader = null;
 
@@ -27,7 +28,20 @@ namespace Voron.Impl.Log
 			_writePage = 0;
 		}
 
+		public LogFile(IVirtualPager pager, long logNumber, long lastSyncedPage)
+			: this(pager, logNumber)
+		{
+			_lastSyncedPage = lastSyncedPage;
+			_writePage = lastSyncedPage + 1;
+		}
+
+
 		public long Number { get; private set; }
+
+		public long LastSyncedPage
+		{
+			get { return _lastSyncedPage; }
+		}
 
 		public IEnumerable<long> Pages
 		{
@@ -69,23 +83,24 @@ namespace Voron.Impl.Log
 		public void TransactionCommit(Transaction tx)
 		{
 			LastCommittedTransactionId = tx.Id;
-			LastPageNumberOfCommittedTransaction = tx.NextPageNumber - 1;
+			LastPageNumberOfLastCommittedTransaction = tx.NextPageNumber - 1;
 
-			_currentTxHeader->LastPageNumber = LastPageNumberOfCommittedTransaction;
+			_currentTxHeader->LastPageNumber = LastPageNumberOfLastCommittedTransaction;
 			_currentTxHeader->Crc = 0; //TODO
 			_currentTxHeader->Marker |= TransactionMarker.End;
 			_currentTxHeader->PageCount = _allocatedPagesInTransaction;
 			tx.Environment.Root.State.CopyTo(&_currentTxHeader->Root);
+			//TODO free space copy
 		}
 
 		public long LastCommittedTransactionId { get; private set; }
 
-		public long LastPageNumberOfCommittedTransaction { get; private set; }
+		public long LastPageNumberOfLastCommittedTransaction { get; private set; }
 
 		private TransactionHeader* GetTransactionHeader()
 		{
-			if (_lastFlushedPage != _writePage - 1)
-				_writePage = _lastFlushedPage + 1;
+			if (_lastSyncedPage != _writePage - 1)
+				_writePage = _lastSyncedPage + 1;
 
 			var result = (TransactionHeader*) Allocate(-1, 1).Base;
 
@@ -97,15 +112,15 @@ namespace Voron.Impl.Log
 			get { return _pager.NumberOfAllocatedPages - _writePage - 1; }
 		}
 
-		public void Flush()
+		public void Sync()
 		{
-			var start = _lastFlushedPage + 1;
+			var start = _lastSyncedPage + 1;
 			var count = _writePage - start;
 
 			_pager.Flush(start, count);
 			_pager.Sync();
 
-			_lastFlushedPage += count;
+			_lastSyncedPage += count;
 		}
 
 		public Page ReadPage(Transaction tx, long pageNumber)
@@ -139,6 +154,36 @@ namespace Voron.Impl.Log
 		public void Dispose()
 		{
 			_pager.Dispose();
+		}
+
+		public void BuildPageTranslationTable()
+		{
+			long readPosition = 0;
+
+			while (true)
+			{
+				var txHeader = (TransactionHeader*)_pager.Read(null, readPosition).Base;
+
+				if(txHeader->Marker.HasFlag(TransactionMarker.Start) == false)
+					break;
+
+				readPosition++;
+
+				for (var i = 0; i < txHeader->PageCount; i++)
+				{
+					var page = _pager.Read(null, readPosition);
+
+					_pageTranslationTable[page.PageNumber] = readPosition;
+
+					if (page.IsOverflow)
+						readPosition += Page.GetNumberOfOverflowPages(_pager.PageSize, page.OverflowSize);
+					else
+						readPosition++;
+
+					_lastSyncedPage = readPosition - 1;
+					_writePage = _lastSyncedPage + 1;
+				}
+			}
 		}
 	}
 }

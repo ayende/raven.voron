@@ -8,6 +8,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Runtime.InteropServices;
 using Voron.Impl.FileHeaders;
 using Voron.Trees;
 
@@ -22,12 +23,17 @@ namespace Voron.Impl.Log
 		private LogFile _currentFile;
 		private readonly List<LogFile> _logFiles = new List<LogFile>();
 		private readonly Func<long, string> _logName = number => string.Format("{0:D19}.txlog", number);
+		private FileHeader* _fileHeader;
+		private IntPtr _inMemoryHeader;
+		private bool _disposeLogFiles;
 
-		public WriteAheadLog(StorageEnvironment env, Func<string, IVirtualPager> createLogFilePager, IVirtualPager dataPager)
+		public WriteAheadLog(StorageEnvironment env, Func<string, IVirtualPager> createLogFilePager, IVirtualPager dataPager, bool disposeLogFiles = true)
 		{
 			_env = env;
 			_createLogFilePager = createLogFilePager;
 			_dataPager = dataPager;
+			_disposeLogFiles = disposeLogFiles;
+			_fileHeader = GetEmptyFileHeader();
 		}
 
 		public long LogFileSize
@@ -46,61 +52,65 @@ namespace Voron.Impl.Log
 
 			_logFiles.Add(log);
 
-			WriteLogState();
+			UpdateLogInfo();
+			WriteFileHeader();
 
 			return log;
 		}
 
-		public void Recover()
+		public void Recovery(FileHeader* fileHeader)
 		{
-			var info = ReadLogInfo();
+			_fileHeader = fileHeader;
+			var logInfo = fileHeader->LogInfo;
 
-			for (var logNumber = info->RecentLog - info->LogFilesCount + 1; logNumber <= info->RecentLog; logNumber++)
+			for (var logNumber = logInfo.RecentLog - logInfo.LogFilesCount + 1; logNumber <= logInfo.RecentLog; logNumber++)
 			{
-				var log = new LogFile(_createLogFilePager(_logName(logNumber)), logNumber);
-
-				_logFiles.Add(log);
+				_logFiles.Add(new LogFile(_createLogFilePager(_logName(logNumber)), logNumber));
 			}
 
-			_currentLogNumber = info->RecentLog;
+			foreach (var logFile in _logFiles)
+			{
+				logFile.BuildPageTranslationTable();
+			}
 
-			// TODO need to recover by using log files
+			_currentLogNumber = logInfo.RecentLog;
+			_currentFile = _logFiles.Last();
 		}
 
-		private LogInfo* ReadLogInfo()
+		public void UpdateLogInfo()
 		{
-			var logInfoPage = _dataPager.Read(null, 0);
-			var logInfo = (LogInfo*)logInfoPage.Base + Constants.PageHeaderSize;
-
-			return logInfo;
+			_fileHeader->LogInfo.RecentLog = _logFiles.Count > 0 ? _logFiles.Last().Number : -1;
+			_fileHeader->LogInfo.LogFilesCount = _logFiles.Count;
 		}
 
-		public void WriteLogState(long pageNumber = 0)
+		public void UpdateFileHeaderAfterDataFileSync()
 		{
-			var logInfoPage = _dataPager.TempPage;
-			logInfoPage.PageNumber = pageNumber;
-			var logInfo = (LogInfo*) logInfoPage.Base + Constants.PageHeaderSize;
+			_fileHeader->TransactionId = _currentFile.LastCommittedTransactionId;
+			_fileHeader->LastPageNumber = _currentFile.LastPageNumberOfLastCommittedTransaction;
 
-			logInfo->RecentLog = _currentFile != null ? _currentFile.Number : -1;
-			logInfo->LogFilesCount = _logFiles.Count;
+			_fileHeader->LogInfo.LastSyncedLog = _currentFile.Number;
+			_fileHeader->LogInfo.LastSyncedPage = _currentFile.LastSyncedPage;
 
-			_dataPager.Write(logInfoPage);
-			_dataPager.Sync();
+			_env.FreeSpaceHandling.CopyStateTo(&_fileHeader->FreeSpace);
+			_env.Root.State.CopyTo(&_fileHeader->Root);
 		}
 
-		public void WriteFileHeader()
+		private void WriteFileHeader()
 		{
 			var fileHeaderPage = _dataPager.TempPage;
-			fileHeaderPage.PageNumber = 1;// TODO 
+			fileHeaderPage.PageNumber = 0;// TODO 
 
-			var fileHeader = ((FileHeader*)fileHeaderPage.Base + Constants.PageHeaderSize);
+			var header = ((FileHeader*)fileHeaderPage.Base + Constants.PageHeaderSize);
 
-			fileHeader->MagicMarker = Constants.MagicMarker;
-			fileHeader->Version = Constants.CurrentVersion;
-			fileHeader->TransactionId = _currentFile.LastCommittedTransactionId;
-			fileHeader->LastPageNumber = _currentFile.LastPageNumberOfCommittedTransaction;
-			_env.FreeSpaceHandling.CopyStateTo(&fileHeader->FreeSpace);
-			_env.Root.State.CopyTo(&fileHeader->Root);
+			header->MagicMarker = Constants.MagicMarker;
+			header->Version = Constants.CurrentVersion;
+			header->TransactionId = _fileHeader->TransactionId;
+			header->LastPageNumber = _fileHeader->LastPageNumber;
+			header->FreeSpace = _fileHeader->FreeSpace;
+			header->LogInfo = _fileHeader->LogInfo;
+			header->Root = _fileHeader->Root;
+
+			_dataPager.EnsureContinuous(null, fileHeaderPage.PageNumber, 1);
 
 			_dataPager.Write(fileHeaderPage);
 			_dataPager.Sync();
@@ -147,7 +157,7 @@ namespace Voron.Impl.Log
 		{
 			foreach (var logFile in _logFiles)
 			{
-				logFile.Flush(); //TODO need to do it better - no need to flush all log files
+				logFile.Sync(); //TODO need to do it better - no need to flush all log files
 			}
 		}
 
@@ -182,7 +192,7 @@ namespace Voron.Impl.Log
 
 			_dataPager.Sync();
 
-			WriteFileHeader();
+			UpdateFileHeaderAfterDataFileSync();
 
 			for (int i = 0; i < _logFiles.Count -1; i++)
 			{
@@ -199,17 +209,53 @@ namespace Voron.Impl.Log
 				_currentFile = null;
 			}
 
-			WriteLogState();
+			UpdateLogInfo();
+
+			WriteFileHeader();
 		}
 
 		public void Dispose()
 		{
-			foreach (var logFile in _logFiles)
+			if (_inMemoryHeader != IntPtr.Zero)
 			{
-				logFile.Dispose();
+				Marshal.FreeHGlobal(_inMemoryHeader);
+				_inMemoryHeader = IntPtr.Zero;
+			}
+
+			if(_disposeLogFiles)
+			{
+				foreach (var logFile in _logFiles)
+				{
+					logFile.Dispose();
+				}
 			}
 
 			_logFiles.Clear();
+		}
+
+		private FileHeader* GetEmptyFileHeader()
+		{
+			_inMemoryHeader = Marshal.AllocHGlobal(_dataPager.PageSize);
+
+			var header = (FileHeader*) _inMemoryHeader;
+
+			header->MagicMarker = Constants.MagicMarker;
+			header->Version = Constants.CurrentVersion;
+			header->TransactionId = 0;
+			header->LastPageNumber = 1;
+			header->FreeSpace.FirstBufferPageNumber = -1;
+			header->FreeSpace.SecondBufferPageNumber = -1;
+			header->FreeSpace.NumberOfTrackedPages = 0;
+			header->FreeSpace.NumberOfPagesTakenForTracking = 0;
+			header->FreeSpace.PageSize = -1;
+			header->FreeSpace.Checksum = 0;
+			header->Root.RootPageNumber = -1;
+			header->LogInfo.RecentLog = -1;
+			header->LogInfo.LogFilesCount = 0;
+			header->LogInfo.LastSyncedLog = -1;
+			header->LogInfo.LastSyncedPage = -1;
+
+			return header;
 		}
 	}
 }

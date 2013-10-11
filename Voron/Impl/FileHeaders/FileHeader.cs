@@ -5,7 +5,7 @@ namespace Voron.Impl.FileHeaders
 {
     [StructLayout(LayoutKind.Explicit, Pack = 1)]
     public struct FileHeader
-    {
+    {//TODO moove log info right after marker and version
         /// <summary>
         /// Just a value chosen to mark our files headers, this is used to 
         /// make sure that we are opening the right format file
@@ -35,10 +35,13 @@ namespace Voron.Impl.FileHeaders
         [FieldOffset(28)] 
         public FreeSpaceHeader FreeSpace;
 
+		[FieldOffset(68)]
+		public LogInfo LogInfo;
+
         /// <summary>
         /// The root node for the main tree
         /// </summary>
-        [FieldOffset(90)]
+        [FieldOffset(120)]
         public TreeRootHeader Root;
     }
 }

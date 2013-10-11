@@ -62,7 +62,7 @@ namespace Voron.Impl
 
 		public override void Flush(long start, long count)
 		{
-			//TODO arek
+			// nothing to do here - this is needed for memory mapped files only
 		}
 
 		public override void AllocateMorePages(Transaction tx, long newLength)

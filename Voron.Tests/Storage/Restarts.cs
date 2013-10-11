@@ -1,42 +1,57 @@
-﻿using System.Diagnostics;
+﻿using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using Voron.Impl;
+using Voron.Impl.Log;
 using Xunit;
 
 namespace Voron.Tests.Storage
 {
     public class Restarts
     {
-		//[Fact] TODO arek
-		//public void DataIsKeptAfterRestart()
-		//{
-		//	using (var pureMemoryPager = new PureMemoryPager())
-		//	{
-		//		using (var env = new StorageEnvironment(pureMemoryPager, ownsPager: false))
-		//		{
-		//			using (var tx = env.NewTransaction(TransactionFlags.ReadWrite))
-		//			{
-		//				env.Root.Add(tx, "test/1", new MemoryStream());
-		//				tx.Commit();
-		//			}
-		//			using (var tx = env.NewTransaction(TransactionFlags.ReadWrite))
-		//			{
-		//				env.Root.Add(tx, "test/2", new MemoryStream());
-		//				tx.Commit();
-		//			}
-		//		}
+		[Fact]
+		public void DataIsKeptAfterRestart()
+		{
+			using (var pureMemoryPager = new PureMemoryPager())
+			{
+				var logPagers = new Dictionary<string, PureMemoryPager>();
 
-		//		using (var env = new StorageEnvironment(pureMemoryPager))
-		//		{
-		//			using (var tx = env.NewTransaction(TransactionFlags.Read))
-		//			{
-		//				Assert.NotNull(env.Root.Read(tx, "test/1"));
-		//				Assert.NotNull(env.Root.Read(tx, "test/2"));
-		//				tx.Commit();
-		//			}
-		//		}
-		//   }
-		//}
+				using (var env = new StorageEnvironment(pureMemoryPager, logName =>
+					                                        {
+						                                        var pager = new PureMemoryPager();
+						                                        logPagers[logName] = pager;
+						                                        return pager;
+					                                        },
+				                                        ownsPagers: false))
+				{
+					using (var tx = env.NewTransaction(TransactionFlags.ReadWrite))
+					{
+						env.Root.Add(tx, "test/1", new MemoryStream());
+						tx.Commit();
+					}
+					using (var tx = env.NewTransaction(TransactionFlags.ReadWrite))
+					{
+						env.Root.Add(tx, "test/2", new MemoryStream());
+						tx.Commit();
+					}
+				}
+
+				using (var env = new StorageEnvironment(pureMemoryPager, logName =>
+					{
+						if (logPagers.ContainsKey(logName))
+							return logPagers[logName];
+						return new PureMemoryPager();
+					}))
+				{
+					using (var tx = env.NewTransaction(TransactionFlags.Read))
+					{
+						Assert.NotNull(env.Root.Read(tx, "test/1"));
+						Assert.NotNull(env.Root.Read(tx, "test/2"));
+						tx.Commit();
+					}
+				}
+			}
+		}
 
 		//[Fact]
 		//public void DataIsKeptAfterRestartForSubTrees()
