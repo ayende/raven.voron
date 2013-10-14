@@ -91,6 +91,8 @@ namespace Voron.Impl.Log
 			_currentTxHeader->PageCount = _allocatedPagesInTransaction;
 			tx.Environment.Root.State.CopyTo(&_currentTxHeader->Root);
 			//TODO free space copy
+
+			_currentTxHeader = null;
 		}
 
 		public long LastCommittedTransactionId { get; private set; }

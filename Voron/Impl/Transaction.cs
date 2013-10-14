@@ -255,7 +255,7 @@ namespace Voron.Impl
 			}
 
 			_log.TransactionCommit(this);
-			_log.Flush();
+			_log.Sync();
 
 			Committed = true;
 

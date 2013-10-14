@@ -10,7 +10,6 @@ using Voron.Impl.FileHeaders;
 using Voron.Impl.FreeSpace;
 using Voron.Impl.Log;
 using Voron.Trees;
-using Voron.Util;
 
 namespace Voron
 {
@@ -33,6 +32,7 @@ namespace Voron
         public TransactionMergingWriter Writer { get; private set; }
 
 	    private readonly WriteAheadLog _log;
+	    private Timer _logApplyingTimer;
 
 	    public SnapshotReader CreateSnapshot()
         {
@@ -55,7 +55,10 @@ namespace Voron
 				Root.Name = "Root";
 				
                 Writer = new TransactionMergingWriter(this);
-            }
+
+				_logApplyingTimer = new Timer(FlushLogToDataFile);
+				_logApplyingTimer.Change(TimeSpan.FromMinutes(5), TimeSpan.FromMinutes(5));
+			}
             catch (Exception)
             {
                 Dispose();
@@ -333,20 +336,6 @@ namespace Voron
             {
                 _txWriter.Release();
             }
-
-			//TODO temp solution - need to do it better
-			if (_txWriter.CurrentCount > 0) 
-			{
-				_txWriter.Wait();
-				try
-				{
-					_log.ApplyLogsToDataFile();
-				}
-				finally 
-				{
-					_txWriter.Release();
-				}
-			}
         }
 
         public void Backup(Stream output)
@@ -391,6 +380,14 @@ namespace Voron
                     txr.Dispose();
             }
         }
+
+		private void FlushLogToDataFile(object state)
+		{
+			if(_activeTransactions.Count(x => x.Value.Flags == TransactionFlags.ReadWrite) > 0)
+				return;
+
+			_log.ApplyLogsToDataFile();
+		}
 
         public Dictionary<string, List<long>> AllPages(Transaction tx)
         {
