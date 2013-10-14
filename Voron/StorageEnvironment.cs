@@ -236,12 +236,12 @@ namespace Voron
 
             FileHeader* e1 = GetFileHeaderFrom(fst);
 
-	        return e1; //TODO
-
+	        return e1;
+			//TODO
             FileHeader* e2 = GetFileHeaderFrom(snd);
 
             FileHeader* entry = e1;
-            if (e2->TransactionId > e1->TransactionId)
+            if (e2->LogInfo.DataFlushCounter > e1->LogInfo.DataFlushCounter)
             {
                 entry = e2;
             }

@@ -5,7 +5,7 @@ namespace Voron.Impl.FileHeaders
 {
     [StructLayout(LayoutKind.Explicit, Pack = 1)]
     public struct FileHeader
-    {//TODO moove log info right after marker and version
+    {
         /// <summary>
         /// Just a value chosen to mark our files headers, this is used to 
         /// make sure that we are opening the right format file
@@ -17,31 +17,35 @@ namespace Voron.Impl.FileHeaders
         /// </summary>
         [FieldOffset(8)]
         public int Version;
+
+		/// <summary>
+		/// Log info that flushed this page
+		/// </summary>
+		[FieldOffset(12)]
+		public LogInfo LogInfo;
+
         /// <summary>
-        /// The transaction id that committed this page
+        /// The transaction id
         /// </summary>
-        [FieldOffset(12)]
+        [FieldOffset(52)]
         public long TransactionId;
 
         /// <summary>
         /// The last used page number for this file
         /// </summary>
-        [FieldOffset(20)]
+        [FieldOffset(60)]
         public long LastPageNumber;
 
         /// <summary>
         /// The root node for free space
         /// </summary>
-        [FieldOffset(28)] 
+        [FieldOffset(68)] 
         public FreeSpaceHeader FreeSpace;
-
-		[FieldOffset(68)]
-		public LogInfo LogInfo;
 
         /// <summary>
         /// The root node for the main tree
         /// </summary>
-        [FieldOffset(120)]
+        [FieldOffset(108)]
         public TreeRootHeader Root;
     }
 }

@@ -12,15 +12,18 @@ namespace Voron.Impl.Log
 	public struct LogInfo
 	{
 		[FieldOffset(0)]
-		public long RecentLog;
+		public long DataFlushCounter;
 
 		[FieldOffset(8)]
-		public int LogFilesCount;
+		public long RecentLog;
 
 		[FieldOffset(16)]
-		public long LastSyncedLog;
+		public int LogFilesCount;
 
 		[FieldOffset(24)]
+		public long LastSyncedLog;
+
+		[FieldOffset(32)]
 		public long LastSyncedPage;
 	}
 }

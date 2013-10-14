@@ -27,6 +27,7 @@ namespace Voron.Impl.Log
 		private long _logIndex = -1;
 		private FileHeader* _fileHeader;
 		private IntPtr _inMemoryHeader;
+		private long _dataFlushCounter = 0;
 
 		public WriteAheadLog(StorageEnvironment env, Func<string, IVirtualPager> createLogFilePager, IVirtualPager dataPager, bool disposeLogFiles = true)
 		{
@@ -92,6 +93,7 @@ namespace Voron.Impl.Log
 			}
 
 			_logIndex = logInfo.RecentLog;
+			_dataFlushCounter = logInfo.DataFlushCounter + 1;
 
 			return true;
 		}
@@ -109,6 +111,7 @@ namespace Voron.Impl.Log
 
 			_fileHeader->LogInfo.LastSyncedLog = lastSyncedLog.Number;
 			_fileHeader->LogInfo.LastSyncedPage = lastSyncedLog.LastSyncedPage;
+			_fileHeader->LogInfo.DataFlushCounter = _dataFlushCounter;
 
 			_env.FreeSpaceHandling.CopyStateTo(&_fileHeader->FreeSpace);
 			_env.Root.State.CopyTo(&_fileHeader->Root);
@@ -117,7 +120,7 @@ namespace Voron.Impl.Log
 		private void WriteFileHeader()
 		{
 			var fileHeaderPage = _dataPager.TempPage;
-			fileHeaderPage.PageNumber = 0;// TODO 
+			fileHeaderPage.PageNumber = _dataFlushCounter & 1;
 
 			var header = ((FileHeader*)fileHeaderPage.Base + Constants.PageHeaderSize);
 
@@ -255,6 +258,8 @@ namespace Voron.Impl.Log
 			UpdateLogInfo();
 
 			WriteFileHeader();
+
+			_dataFlushCounter++;
 		}
 
 		private void ScheduleFlush(LogFile log)
@@ -298,6 +303,7 @@ namespace Voron.Impl.Log
 			header->FreeSpace.PageSize = -1;
 			header->FreeSpace.Checksum = 0;
 			header->Root.RootPageNumber = -1;
+			header->LogInfo.DataFlushCounter = -1;
 			header->LogInfo.RecentLog = -1;
 			header->LogInfo.LogFilesCount = 0;
 			header->LogInfo.LastSyncedLog = -1;
