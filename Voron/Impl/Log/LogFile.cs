@@ -7,6 +7,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using Voron.Trees;
 
 namespace Voron.Impl.Log
@@ -14,10 +15,9 @@ namespace Voron.Impl.Log
 	public unsafe class LogFile : IDisposable
 	{
 		private readonly IVirtualPager _pager;
-		private readonly Dictionary<long, long> _pageTranslationTable = new Dictionary<long, long>(); // TODO after restart we need to recover those values
-		private long _writePage = 0;//TODO after restart we need to recover this value
+		private readonly Dictionary<long, long> _pageTranslationTable = new Dictionary<long, long>();
+		private long _writePage = 0;
 		private long _lastSyncedPage = -1;
-		private long _readingPage = 0;
 		private int _allocatedPagesInTransaction = 0;
 		private TransactionHeader* _currentTxHeader = null;
 
@@ -57,7 +57,7 @@ namespace Voron.Impl.Log
 			_currentTxHeader->LastPageNumber = -1;
 			_currentTxHeader->PageCount = -1;
 			_currentTxHeader->Crc = 0;
-			_currentTxHeader->Marker = TransactionMarker.Start;
+			_currentTxHeader->TxMarker = TransactionMarker.Start;
 
 			_allocatedPagesInTransaction = 0;
 		}
@@ -66,7 +66,7 @@ namespace Voron.Impl.Log
 		{
 			if (_currentTxHeader != null)
 			{
-				_currentTxHeader->Marker |= TransactionMarker.Split;
+				_currentTxHeader->TxMarker |= TransactionMarker.Split;
 				_currentTxHeader->PageCount = _allocatedPagesInTransaction;
 			}
 			else
@@ -74,7 +74,7 @@ namespace Voron.Impl.Log
 				_currentTxHeader = GetTransactionHeader();
 				_currentTxHeader->TxId = tx.Id;
 				_currentTxHeader->NextPageNumber = tx.NextPageNumber;
-				_currentTxHeader->Marker = TransactionMarker.Split;
+				_currentTxHeader->TxMarker = TransactionMarker.Split;
 				_currentTxHeader->PageCount = -1;
 				_currentTxHeader->Crc = 0;
 			}	
@@ -87,7 +87,7 @@ namespace Voron.Impl.Log
 
 			_currentTxHeader->LastPageNumber = LastPageNumberOfLastCommittedTransaction;
 			_currentTxHeader->Crc = 0; //TODO
-			_currentTxHeader->Marker |= TransactionMarker.End;
+			_currentTxHeader->TxMarker |= TransactionMarker.End;
 			_currentTxHeader->PageCount = _allocatedPagesInTransaction;
 			tx.Environment.Root.State.CopyTo(&_currentTxHeader->Root);
 			//TODO free space copy
@@ -103,6 +103,7 @@ namespace Voron.Impl.Log
 				_writePage = _lastSyncedPage + 1;
 
 			var result = (TransactionHeader*) Allocate(-1, 1).Base;
+			result->HeaderMarker = Constants.TransactionHeaderMarker;
 
 			return result;
 		}
@@ -156,20 +157,32 @@ namespace Voron.Impl.Log
 			_pager.Dispose();
 		}
 
-		public void BuildPageTranslationTable()
+		public TransactionHeader* RecoverAndValidate(long startReadingPage, TransactionHeader* previous)
 		{
-			long readPosition = 0;
+			TransactionHeader* lastReadHeader = previous;
 
-			while (true)
+			var readPosition = startReadingPage;
+
+			while (readPosition < _pager.NumberOfAllocatedPages)
 			{
-				var txHeader = (TransactionHeader*)_pager.Read(null, readPosition).Base;
+				var current = (TransactionHeader*)_pager.Read(null, readPosition).Base;
 
-				if(txHeader->Marker.HasFlag(TransactionMarker.Start) == false)
+				if(current->HeaderMarker != Constants.TransactionHeaderMarker)
 					break;
+
+				ValidateHeader(current, lastReadHeader);
+
+				if (current->TxMarker.HasFlag(TransactionMarker.End) == false && current->TxMarker.HasFlag(TransactionMarker.Split) == false)
+				{
+					readPosition += current->PageCount + current->OverflowPageCount;
+					continue;
+				}
+
+				lastReadHeader = current;
 
 				readPosition++;
 
-				for (var i = 0; i < txHeader->PageCount; i++)
+				for (var i = 0; i < current->PageCount; i++)
 				{
 					var page = _pager.Read(null, readPosition);
 
@@ -184,6 +197,39 @@ namespace Voron.Impl.Log
 					_writePage = _lastSyncedPage + 1;
 				}
 			}
+
+			return lastReadHeader;
+		}
+
+		private void ValidateHeader(TransactionHeader* current, TransactionHeader* previous)
+		{
+			if (current->TxId < 0)
+				throw new InvalidDataException("Transaction id cannot be less than 0 (Tx: " + current->TxId);
+			if (current->TxMarker.HasFlag(TransactionMarker.Start) == false)
+				throw new InvalidDataException("Transaction must have Start marker");
+			if (current->LastPageNumber < 0)
+				throw new InvalidDataException("Last page number after committed transaction must be greater than 0");
+
+			if (previous == null) 
+				return;
+
+			if (previous->TxMarker.HasFlag(TransactionMarker.Split))
+			{
+				if(current->TxMarker.HasFlag(TransactionMarker.Split) == false)
+					throw new InvalidDataException("Previous transaction have a split marker, so the current one should have it too");
+
+				if (current->TxId == previous->TxId)
+					throw new InvalidDataException("Split transaction should have the same id in the log. Expected id: " +
+					                               previous->TxId + ", got: " + current->TxId);
+			}
+			else
+			{
+				if (current->TxId != 1 && // 1 is a first storage transaction which does not increment transaction counter after commit
+					current->TxId - previous->TxId != 1)
+					throw new InvalidDataException("Unexpected transaction id. Expected: " + (previous->TxId + 1) + ", got:" +
+					                               current->TxId);
+			}
+			
 		}
 	}
 }

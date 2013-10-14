@@ -19,13 +19,13 @@ namespace Voron.Impl.Log
 		private readonly StorageEnvironment _env;
 		private readonly Func<string, IVirtualPager> _createLogFilePager;
 		private readonly IVirtualPager _dataPager;
-		private long _currentLogNumber = -1;
-		private LogFile _currentFile;
 		private readonly List<LogFile> _logFiles = new List<LogFile>();
 		private readonly Func<long, string> _logName = number => string.Format("{0:D19}.txlog", number);
+		private readonly bool _disposeLogFiles;
+		private long _currentLogNumber = -1;
+		private LogFile _currentFile;
 		private FileHeader* _fileHeader;
 		private IntPtr _inMemoryHeader;
-		private bool _disposeLogFiles;
 
 		public WriteAheadLog(StorageEnvironment env, Func<string, IVirtualPager> createLogFilePager, IVirtualPager dataPager, bool disposeLogFiles = true)
 		{
@@ -58,10 +58,17 @@ namespace Voron.Impl.Log
 			return log;
 		}
 
-		public void Recovery(FileHeader* fileHeader)
+		public bool TryRecover(FileHeader* fileHeader, out TransactionHeader* lastTxHeader)
 		{
 			_fileHeader = fileHeader;
 			var logInfo = fileHeader->LogInfo;
+
+			lastTxHeader = null;
+
+			if (logInfo.LogFilesCount == 0)
+			{
+				return false;
+			}
 
 			for (var logNumber = logInfo.RecentLog - logInfo.LogFilesCount + 1; logNumber <= logInfo.RecentLog; logNumber++)
 			{
@@ -70,11 +77,18 @@ namespace Voron.Impl.Log
 
 			foreach (var logFile in _logFiles)
 			{
-				logFile.BuildPageTranslationTable();
+				long startRead = 0;
+
+				if (logFile.Number == logInfo.LastSyncedLog)
+					startRead = logInfo.LastSyncedPage + 1;
+
+				lastTxHeader = logFile.RecoverAndValidate(startRead, lastTxHeader);
 			}
 
 			_currentLogNumber = logInfo.RecentLog;
 			_currentFile = _logFiles.Last();
+
+			return true;
 		}
 
 		public void UpdateLogInfo()

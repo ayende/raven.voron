@@ -1,4 +1,5 @@
-﻿using System.IO;
+﻿using System.Collections.Generic;
+using System.IO;
 using Voron.Impl;
 using Xunit;
 
@@ -26,47 +27,63 @@ namespace Voron.Tests.Bugs
 			 }
 		 }
 
-		 //[Fact] TODO arek
-		 //public void SurviveRestart()
-		 //{
-		 //   using (var pager = new PureMemoryPager())
-		 //   {
-		 //	   using (var env = new StorageEnvironment(pager, ownsPager: false))
-		 //	   {
-		 //		   using (var tx = env.NewTransaction(TransactionFlags.ReadWrite))
-		 //		   {
-		 //			   env.CreateTree(tx, "events");
+		 [Fact]
+		 public void SurviveRestart()
+		 {
+			 using (var pager = new PureMemoryPager())
+			 {
+				 var logPagers = new Dictionary<string, PureMemoryPager>();
 
-		 //			   tx.Commit();
-		 //		   }
+				 using (var env = new StorageEnvironment(pager,
+				                                         logName =>
+					                                         {
+						                                         var p = new PureMemoryPager();
+						                                         logPagers[logName] = p;
+						                                         return p;
+					                                         },
+				                                         ownsPagers: false))
+				 {
+					 using (var tx = env.NewTransaction(TransactionFlags.ReadWrite))
+					 {
+						 env.CreateTree(tx, "events");
 
-		 //		   using (var tx = env.NewTransaction(TransactionFlags.ReadWrite))
-		 //		   {
-		 //			   env.GetTree(tx,"events").Add(tx, "test", new MemoryStream(0));
+						 tx.Commit();
+					 }
 
-		 //			   tx.Commit();
-		 //		   }
-		 //	   }
+					 using (var tx = env.NewTransaction(TransactionFlags.ReadWrite))
+					 {
+						 env.GetTree(tx, "events").Add(tx, "test", new MemoryStream(0));
 
-		 //	   using (var env = new StorageEnvironment(pager, ownsPager: false))
-		 //	   {
-		 //		   using (var tx = env.NewTransaction(TransactionFlags.ReadWrite))
-		 //		   {
-		 //			   env.CreateTree(tx, "events");
+						 tx.Commit();
+					 }
+				 }
 
-		 //			   tx.Commit();
-		 //		   }
+				 using (var env = new StorageEnvironment(pager,
+				                                         logName =>
+					                                         {
+						                                         if (logPagers.ContainsKey(logName))
+							                                         return logPagers[logName];
+						                                         return new PureMemoryPager();
+					                                         },
+				                                         ownsPagers: false))
+				 {
+					 using (var tx = env.NewTransaction(TransactionFlags.ReadWrite))
+					 {
+						 env.CreateTree(tx, "events");
 
-		 //		   using (var tx = env.NewTransaction(TransactionFlags.ReadWrite))
-		 //		   {
-		 //			   Assert.NotNull(env.GetTree(tx,"events").Read(tx, "test"));
+						 tx.Commit();
+					 }
 
-		 //			   tx.Commit();
-		 //		   }
-		 //	   }
-		 //   }
+					 using (var tx = env.NewTransaction(TransactionFlags.ReadWrite))
+					 {
+						 Assert.NotNull(env.GetTree(tx, "events").Read(tx, "test"));
 
-			
-		 //}
+						 tx.Commit();
+					 }
+				 }
+			 }
+
+
+		 }
 	}
 }

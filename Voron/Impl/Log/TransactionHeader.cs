@@ -13,24 +13,30 @@ namespace Voron.Impl.Log
 	public struct TransactionHeader
 	{
 		[FieldOffset(0)]
-		public long TxId;
+		public ulong HeaderMarker;
 
 		[FieldOffset(8)]
-		public long NextPageNumber;
+		public long TxId;
 
 		[FieldOffset(16)]
-		public long LastPageNumber;
+		public long NextPageNumber;
 
 		[FieldOffset(24)]
+		public long LastPageNumber;
+
+		[FieldOffset(32)]
 		public int PageCount;
 
-		[FieldOffset(28)]
+		[FieldOffset(36)]
+		public int OverflowPageCount;
+
+		[FieldOffset(40)]
 		public uint Crc;
 
-		[FieldOffset(32)] 
-		public TransactionMarker Marker;
+		[FieldOffset(44)] 
+		public TransactionMarker TxMarker;
 
-		[FieldOffset(36)]
+		[FieldOffset(48)]
 		public TreeRootHeader Root;
 	}
 }

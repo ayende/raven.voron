@@ -100,19 +100,27 @@ namespace Voron
 
 			// the first two pages are allocated for double buffering tx commits
 			FileHeader* entry = FindLatestFileHeadeEntry();
+			TreeRootHeader* treeRootHeader = &entry->Root;
+
 			NextPageNumber = entry->LastPageNumber + 1;
 			_transactionsCounter = entry->TransactionId + 1;
-
-			_log.Recovery(entry);
+	        
+	        TransactionHeader* lastTxHeader;
+	        if (_log.TryRecover(entry, out lastTxHeader))
+	        {
+		        NextPageNumber = lastTxHeader->LastPageNumber + 1;
+		        _transactionsCounter = lastTxHeader->TxId + 1;
+		        treeRootHeader = &lastTxHeader->Root;
+	        }
 
 			using (var tx = new Transaction(_log, _dataPager, this, _transactionsCounter + 1, TransactionFlags.ReadWrite, null))
 			{
-				var root = Tree.Open(tx, _sliceComparer, &entry->Root);
+				var root = Tree.Open(tx, _sliceComparer, treeRootHeader);
 
 				// important to first create the  tree, then set it on the env
 				Root = root;
 
-				var freeSpaceHeader = &entry->FreeSpace;
+				var freeSpaceHeader = &entry->FreeSpace;// TODO
 				FreeSpaceHandling.Initialize(freeSpaceHeader);
 				FreeSpaceHandling.RecoverBuffers();
 
