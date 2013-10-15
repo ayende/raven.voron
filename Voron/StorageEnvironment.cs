@@ -112,17 +112,17 @@ namespace Voron
 			TreeRootHeader* treeRootHeader = &entry->Root;
 
 			NextPageNumber = entry->LastPageNumber + 1;
-			_transactionsCounter = entry->TransactionId + 1;
+			_transactionsCounter = entry->TransactionId;
 	        
 	        TransactionHeader* lastTxHeader;
 	        if (_log.TryRecover(entry, out lastTxHeader))
 	        {
 		        NextPageNumber = lastTxHeader->LastPageNumber + 1;
-		        _transactionsCounter = lastTxHeader->TxId + 1;
+		        _transactionsCounter = lastTxHeader->TxId;
 		        treeRootHeader = &lastTxHeader->Root;
 	        }
 
-			using (var tx = new Transaction(_log, _dataPager, this, _transactionsCounter + 1, TransactionFlags.ReadWrite, null))
+			using (var tx = new Transaction(_log, _dataPager, this, _transactionsCounter + 1, TransactionFlags.Read, null))
 			{
 				var root = Tree.Open(tx, _sliceComparer, treeRootHeader);
 
