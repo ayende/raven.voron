@@ -102,7 +102,7 @@ namespace Voron.Benchmark
         private static void FillRandomOneTransaction(Stopwatch sw, FlushMode flushMode)
         {
             var memoryMapPager = new FilePager(Path, flushMode);
-			using (var env = new StorageEnvironment(memoryMapPager, file => new MemoryMapPager(file)))
+			using (var env = new StorageEnvironment(memoryMapPager, file => new MemoryMapPager(file, flushMode)))
             {
                 var value = new byte[100];
                 new Random().NextBytes(value);
@@ -134,7 +134,7 @@ namespace Voron.Benchmark
         private static void FillSeqOneTransaction(Stopwatch sw, FlushMode flushMode)
         {
             var memoryMapPager = new FilePager(Path, flushMode);
-			using (var env = new StorageEnvironment(memoryMapPager, file => new MemoryMapPager(file)))
+			using (var env = new StorageEnvironment(memoryMapPager, file => new MemoryMapPager(file, flushMode)))
             {
                 var value = new byte[100];
                 new Random().NextBytes(value);
@@ -166,7 +166,7 @@ namespace Voron.Benchmark
         private static void FillRandomMultipleTransaction(Stopwatch sw, FlushMode flushMode)
         {
             var memoryMapPager = new FilePager(Path, flushMode);
-			using (var env = new StorageEnvironment(memoryMapPager, file => new MemoryMapPager(file)))
+			using (var env = new StorageEnvironment(memoryMapPager, file => new MemoryMapPager(file, flushMode)))
             {
                 var value = new byte[100];
                 new Random().NextBytes(value);
@@ -201,7 +201,7 @@ namespace Voron.Benchmark
         private static void FillSeqMultipleTransaction(Stopwatch sw, FlushMode flushMode)
         {
             var memoryMapPager = new FilePager(Path, flushMode);
-			using (var env = new StorageEnvironment(memoryMapPager, file => new MemoryMapPager(file)))
+			using (var env = new StorageEnvironment(memoryMapPager, file => new MemoryMapPager(file, flushMode)))
             {
                 var value = new byte[100];
                 new Random().NextBytes(value);
