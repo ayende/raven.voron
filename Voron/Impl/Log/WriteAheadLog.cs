@@ -102,6 +102,7 @@ namespace Voron.Impl.Log
 		{
 			_fileHeader->LogInfo.RecentLog = _logFiles.Count > 0 ? _logIndex : -1;
 			_fileHeader->LogInfo.LogFilesCount = _logFiles.Count;
+			_fileHeader->LogInfo.DataFlushCounter = _dataFlushCounter;
 		}
 
 		public void UpdateFileHeaderAfterDataFileSync(LogFile lastSyncedLog)
@@ -117,10 +118,14 @@ namespace Voron.Impl.Log
 			_env.Root.State.CopyTo(&_fileHeader->Root);
 		}
 
-		private void WriteFileHeader()
+		internal void WriteFileHeader(long? pageToWriteHeader = null)
 		{
 			var fileHeaderPage = _dataPager.TempPage;
-			fileHeaderPage.PageNumber = _dataFlushCounter & 1;
+
+			if (pageToWriteHeader == null)
+				fileHeaderPage.PageNumber = _dataFlushCounter & 1;
+			else
+				fileHeaderPage.PageNumber = pageToWriteHeader.Value;
 
 			var header = ((FileHeader*)fileHeaderPage.Base + Constants.PageHeaderSize);
 
@@ -131,8 +136,6 @@ namespace Voron.Impl.Log
 			header->FreeSpace = _fileHeader->FreeSpace;
 			header->LogInfo = _fileHeader->LogInfo;
 			header->Root = _fileHeader->Root;
-
-			_dataPager.EnsureContinuous(null, fileHeaderPage.PageNumber, 1);
 
 			_dataPager.Write(fileHeaderPage);
 			_dataPager.Sync();

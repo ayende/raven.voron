@@ -71,6 +71,12 @@ namespace Voron
 			
 	        if (_dataPager.NumberOfAllocatedPages == 0)
             {
+				_dataPager.EnsureContinuous(null, 0, 2); // for file headers
+
+				// write empty file headers
+				_log.WriteFileHeader(0);
+				_log.WriteFileHeader(1);
+
 				//var freeSpaceHeader = new FreeSpaceHeader
 				//	{
 				//		FirstBufferPageNumber = 2,
@@ -102,7 +108,7 @@ namespace Voron
             // existing db, let us load it
 
 			// the first two pages are allocated for double buffering tx commits
-			FileHeader* entry = FindLatestFileHeadeEntry();
+			FileHeader* entry = FindLatestFileHeaderEntry();
 			TreeRootHeader* treeRootHeader = &entry->Root;
 
 			NextPageNumber = entry->LastPageNumber + 1;
@@ -229,15 +235,12 @@ namespace Voron
 			_log.Dispose();
 		}
 
-        private FileHeader* FindLatestFileHeadeEntry()
+        private FileHeader* FindLatestFileHeaderEntry()
         {
             Page fst = _dataPager.Read(null, 0);
             Page snd = _dataPager.Read(null, 1);
 
             FileHeader* e1 = GetFileHeaderFrom(fst);
-
-	        return e1;
-			//TODO
             FileHeader* e2 = GetFileHeaderFrom(snd);
 
             FileHeader* entry = e1;
