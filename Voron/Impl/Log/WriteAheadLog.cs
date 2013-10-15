@@ -288,7 +288,8 @@ namespace Voron.Impl.Log
 
 		private FileHeader* GetEmptyFileHeader()
 		{
-			_inMemoryHeader = Marshal.AllocHGlobal(_dataPager.PageSize);
+			if(_inMemoryHeader == IntPtr.Zero)
+				_inMemoryHeader = Marshal.AllocHGlobal(_dataPager.PageSize);
 
 			var header = (FileHeader*) _inMemoryHeader;
 
