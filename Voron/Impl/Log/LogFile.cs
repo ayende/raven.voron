@@ -9,11 +9,14 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using Voron.Trees;
+using Voron.Util;
 
 namespace Voron.Impl.Log
 {
 	public unsafe class LogFile : IDisposable
 	{
+		private const int pagesTakenByHeader = 1;
+
 		private readonly IVirtualPager _pager;
 		private readonly Dictionary<long, long> _pageTranslationTable = new Dictionary<long, long>();
 		private long _writePage = 0;
@@ -61,6 +64,7 @@ namespace Voron.Impl.Log
 			_currentTxHeader->TxMarker = TransactionMarker.Start;
 
 			_allocatedPagesInTransaction = 0;
+			_overflowPagesInTransaction = 0;
 		}
 
 		public void TransactionSplit(Transaction tx)
@@ -87,11 +91,16 @@ namespace Voron.Impl.Log
 			LastPageNumberOfLastCommittedTransaction = tx.NextPageNumber - 1;
 
 			_currentTxHeader->LastPageNumber = LastPageNumberOfLastCommittedTransaction;
-			_currentTxHeader->Crc = 0; //TODO
 			_currentTxHeader->TxMarker |= TransactionMarker.End;
 			_currentTxHeader->PageCount = _allocatedPagesInTransaction;
 			_currentTxHeader->OverflowPageCount = _overflowPagesInTransaction;
 			tx.Environment.Root.State.CopyTo(&_currentTxHeader->Root);
+
+			var crcOffset = (int) (_currentTxHeader->PageNumberInLogFile + pagesTakenByHeader)*_pager.PageSize;
+			var crcCount = (_allocatedPagesInTransaction + _overflowPagesInTransaction)*_pager.PageSize;
+
+			_currentTxHeader->Crc = Crc.Value(_pager.PagerState.Base, crcOffset, crcCount);
+
 			//TODO free space copy
 
 			_currentTxHeader = null;
@@ -106,8 +115,9 @@ namespace Voron.Impl.Log
 			if (_lastSyncedPage != _writePage - 1)
 				_writePage = _lastSyncedPage + 1;
 
-			var result = (TransactionHeader*) Allocate(-1, 1).Base;
+			var result = (TransactionHeader*) Allocate(-1, pagesTakenByHeader).Base;
 			result->HeaderMarker = Constants.TransactionHeaderMarker;
+			result->PageNumberInLogFile = _writePage - pagesTakenByHeader;
 
 			return result;
 		}
@@ -191,20 +201,41 @@ namespace Voron.Impl.Log
 
 				readPosition++;
 
+				var transactionPageTranslation = new Dictionary<long, long>();
+
+				uint crc = 0;
+
 				for (var i = 0; i < current->PageCount; i++)
 				{
 					var page = _pager.Read(null, readPosition);
 
-					_pageTranslationTable[page.PageNumber] = readPosition;
+					transactionPageTranslation[page.PageNumber] = readPosition;
 
 					if (page.IsOverflow)
-						readPosition += Page.GetNumberOfOverflowPages(_pager.PageSize, page.OverflowSize);
+					{
+						var numOfPages = Page.GetNumberOfOverflowPages(_pager.PageSize, page.OverflowSize);
+						readPosition += numOfPages;
+						crc = Crc.Extend(crc, page.Base, 0, numOfPages*_pager.PageSize);
+					}
 					else
+					{
 						readPosition++;
+						crc = Crc.Extend(crc, page.Base, 0, _pager.PageSize);
+					}
 
 					_lastSyncedPage = readPosition - 1;
 					_writePage = _lastSyncedPage + 1;
 				}
+
+				if (crc != current->Crc)
+				{
+					throw new InvalidDataException("Checksum mismatch"); //TODO this is temporary, ini the future this condition will just mean that transaction was not committed
+				}
+
+				foreach (var translation in transactionPageTranslation)
+				{
+					_pageTranslationTable[translation.Key] = translation.Value;
+				}	
 			}
 
 			return lastReadHeader;
@@ -218,6 +249,8 @@ namespace Voron.Impl.Log
 				throw new InvalidDataException("Transaction must have Start marker");
 			if (current->LastPageNumber < 0)
 				throw new InvalidDataException("Last page number after committed transaction must be greater than 0");
+			if(current->Crc == 0)
+				throw new InvalidDataException("Transaction checksum can't be equal to 0");
 
 			if (previous == null) 
 				return;

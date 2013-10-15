@@ -16,27 +16,30 @@ namespace Voron.Impl.Log
 		public ulong HeaderMarker;
 
 		[FieldOffset(8)]
-		public long TxId;
+		public long PageNumberInLogFile;
 
 		[FieldOffset(16)]
-		public long NextPageNumber;
+		public long TxId;
 
 		[FieldOffset(24)]
-		public long LastPageNumber;
+		public long NextPageNumber;
 
 		[FieldOffset(32)]
-		public int PageCount;
-
-		[FieldOffset(36)]
-		public int OverflowPageCount;
+		public long LastPageNumber;
 
 		[FieldOffset(40)]
-		public uint Crc;
+		public int PageCount;
 
-		[FieldOffset(44)] 
-		public TransactionMarker TxMarker;
+		[FieldOffset(44)]
+		public int OverflowPageCount;
 
 		[FieldOffset(48)]
+		public uint Crc;
+
+		[FieldOffset(52)] 
+		public TransactionMarker TxMarker;
+
+		[FieldOffset(56)]
 		public TreeRootHeader Root;
 	}
 }

@@ -36,7 +36,8 @@ namespace Voron.Impl
             PagerState.Release();
 			PagerState = new PagerState
 				{
-					Ptr = _ptr
+					Ptr = _ptr,
+					Base = _base
 				};
 			PagerState.AddRef();
 		}
@@ -89,7 +90,7 @@ namespace Voron.Impl
 
 			var oldPager = PagerState;
 
-			var newPager = new PagerState { Ptr = newPtr };
+			var newPager = new PagerState { Ptr = newPtr, Base = _base};
 			newPager.AddRef(); // one for the pager
 
 			if (tx != null) // we only pass null during startup, and we don't need it there
