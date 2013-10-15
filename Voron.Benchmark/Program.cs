@@ -82,8 +82,14 @@ namespace Voron.Benchmark
 
         private static void Time(string name, Action<Stopwatch> action, bool delete = true)
         {
-            if (File.Exists(Path) && delete)
-                File.Delete(Path);
+            if (delete)
+            {
+				if (File.Exists(Path))
+					File.Delete(Path);
+
+				foreach (var txLogFile in Directory.GetFiles(".", "*.txlog"))
+					File.Delete(txLogFile);
+            }
             else
                 FlushOsBuffer();
             var sp = new Stopwatch();
