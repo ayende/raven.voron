@@ -19,6 +19,7 @@ namespace Voron.Impl.Log
 		private long _writePage = 0;
 		private long _lastSyncedPage = -1;
 		private int _allocatedPagesInTransaction = 0;
+		private int _overflowPagesInTransaction = 0;
 		private TransactionHeader* _currentTxHeader = null;
 
 		public LogFile(IVirtualPager pager, long logNumber)
@@ -89,6 +90,7 @@ namespace Voron.Impl.Log
 			_currentTxHeader->Crc = 0; //TODO
 			_currentTxHeader->TxMarker |= TransactionMarker.End;
 			_currentTxHeader->PageCount = _allocatedPagesInTransaction;
+			_currentTxHeader->OverflowPageCount = _overflowPagesInTransaction;
 			tx.Environment.Root.State.CopyTo(&_currentTxHeader->Root);
 			//TODO free space copy
 
@@ -140,13 +142,18 @@ namespace Voron.Impl.Log
 
 			var result = _pager.GetWritable(_writePage);
 
-			if (startPage != -1) // internal use - transaction header allocation
+			if (startPage != -1) // internal use - transaction header allocation, so we don't want to count it as allocated by transaction
 			{
 				// we allocate more than one page only if the page is an overflow
 				// so here we don't want to create mapping for them too
 				_pageTranslationTable[startPage] = _writePage;
 
-				_allocatedPagesInTransaction++; // TODO not sure if here should't we add all overflow pages
+				_allocatedPagesInTransaction++;
+
+				if (numberOfPages > 1)
+				{
+					_overflowPagesInTransaction += (numberOfPages - 1);
+				}
 			}
 
 			_writePage += numberOfPages;
