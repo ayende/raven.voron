@@ -100,6 +100,9 @@ namespace Voron.Impl
 
 		public override void Flush(long startPage, long count)
 		{
+			if(_flushMode == FlushMode.None)
+				return;
+
 			long numberOfBytesToFlush = count * PageSize;
 			long start = startPage * PageSize;
 			FlushViewOfFile(PagerState.Base + start, new IntPtr(numberOfBytesToFlush));
