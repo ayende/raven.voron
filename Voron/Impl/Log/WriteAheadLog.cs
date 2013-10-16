@@ -5,7 +5,6 @@
 // -----------------------------------------------------------------------
 
 using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.InteropServices;
@@ -19,8 +18,8 @@ namespace Voron.Impl.Log
 		private readonly StorageEnvironment _env;
 		private readonly Func<string, IVirtualPager> _createLogFilePager;
 		private readonly IVirtualPager _dataPager;
-		private readonly ConcurrentDictionary<long, LogFile> _logFiles = new ConcurrentDictionary<long, LogFile>();
-		private readonly ConcurrentDictionary<long, LogFile> _scheduledToFlush = new ConcurrentDictionary<long, LogFile>();
+		private readonly List<LogFile> _logFiles = new List<LogFile>();
+		private readonly List<LogFile> _scheduledToFlush = new List<LogFile>();
 		private readonly Func<long, string> _logName = number => string.Format("{0:D19}.txlog", number);
 		private readonly bool _disposeLogFiles;
 		private LogFile _splitLogFile;
@@ -45,7 +44,7 @@ namespace Voron.Impl.Log
 
 		private LogFile CurrentFile
 		{
-			get { return _logFiles[_logIndex]; }
+			get { return _logFiles[(int)_logIndex]; }
 		}
 
 		private void NextFile()
@@ -57,8 +56,7 @@ namespace Voron.Impl.Log
 
 			var log = new LogFile(logPager, _logIndex);
 
-			if (_logFiles.TryAdd(_logIndex, log) == false)
-				throw new InvalidOperationException("Could not add next log file: " + _logIndex);
+			_logFiles.Add(log);
 
 			UpdateLogInfo();
 			WriteFileHeader();
@@ -78,18 +76,17 @@ namespace Voron.Impl.Log
 
 			for (var logNumber = logInfo.RecentLog - logInfo.LogFilesCount + 1; logNumber <= logInfo.RecentLog; logNumber++)
 			{
-				if (_logFiles.TryAdd(logNumber, new LogFile(_createLogFilePager(_logName(logNumber)), logNumber)) == false)
-					throw new InvalidOperationException("Could not add next log file: " + _logIndex);
+				_logFiles.Add(new LogFile(_createLogFilePager(_logName(logNumber)), logNumber));
 			}
 
 			foreach (var logItem in _logFiles)
 			{
 				long startRead = 0;
 
-				if (logItem.Key == logInfo.LastSyncedLog)
+				if (logItem.Number == logInfo.LastSyncedLog)
 					startRead = logInfo.LastSyncedPage + 1;
 
-				lastTxHeader = logItem.Value.RecoverAndValidate(startRead, lastTxHeader);
+				lastTxHeader = logItem.RecoverAndValidate(startRead, lastTxHeader);
 			}
 
 			_logIndex = logInfo.RecentLog;
@@ -172,6 +169,7 @@ namespace Voron.Impl.Log
 
 		public Page ReadPage(Transaction tx, long pageNumber)
 		{
+			// read log files from the back to get the most recent version of page
 			for (var i = _logFiles.Count - 1; i >= 0; i--)
 			{
 				var page = _logFiles[i].ReadPage(tx, pageNumber);
@@ -249,13 +247,13 @@ namespace Voron.Impl.Log
 
 			_dataPager.Sync();
 
-			UpdateFileHeaderAfterDataFileSync(_scheduledToFlush.Last().Value);
+			UpdateFileHeaderAfterDataFileSync(_scheduledToFlush.Last());
 
 			foreach (var logFile in _scheduledToFlush)
 			{
 				LogFile _;
-				_logFiles.TryRemove(logFile.Key, out _);
-				logFile.Value.Dispose();
+				_logFiles.Remove(logFile);
+				logFile.Dispose();
 			}
 
 			UpdateLogInfo();
@@ -267,7 +265,7 @@ namespace Voron.Impl.Log
 
 		private void ScheduleFlush(LogFile log)
 		{
-			_scheduledToFlush.TryAdd(log.Number, log);
+			_scheduledToFlush.Add(log);
 		}
 
 		public void Dispose()
@@ -282,7 +280,7 @@ namespace Voron.Impl.Log
 			{
 				foreach (var logFile in _logFiles)
 				{
-					logFile.Value.Dispose();
+					logFile.Dispose();
 				}
 			}
 
