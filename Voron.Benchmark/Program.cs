@@ -13,7 +13,7 @@ namespace Voron.Benchmark
         private static HashSet<long> _randomNumbers;
         public const int ItemsPerTransaction = 100;
         private const int Transactions = 500;
-        private const string Path = @"bench.data";
+        private const string Path = @"e:\data\bench.data";
 
         public static void Main()
         {
