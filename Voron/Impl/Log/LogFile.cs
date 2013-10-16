@@ -47,7 +47,7 @@ namespace Voron.Impl.Log
 			get { return _lastSyncedPage; }
 		}
 
-		public IEnumerable<long> Pages
+		public IEnumerable<long> ModifiedPageNumbers
 		{
 			get { return _pageTranslationTable.Keys; }
 		}
@@ -138,12 +138,12 @@ namespace Voron.Impl.Log
 			_lastSyncedPage += count;
 		}
 
-		public Page ReadPage(Transaction tx, long pageNumber)
+		public Page ReadPage(long pageNumber)
 		{
 			if (_pageTranslationTable.ContainsKey(pageNumber) == false)
 				return null;
 
-			return _pager.Read(tx, _pageTranslationTable[pageNumber]);
+			return _pager.Read(_pageTranslationTable[pageNumber]);
 		}
 
 		public Page Allocate(long startPage, int numberOfPages)
@@ -184,7 +184,7 @@ namespace Voron.Impl.Log
 
 			while (readPosition < _pager.NumberOfAllocatedPages)
 			{
-				var current = (TransactionHeader*)_pager.Read(null, readPosition).Base;
+				var current = (TransactionHeader*)_pager.Read(readPosition).Base;
 
 				if(current->HeaderMarker != Constants.TransactionHeaderMarker)
 					break;
@@ -207,7 +207,7 @@ namespace Voron.Impl.Log
 
 				for (var i = 0; i < current->PageCount; i++)
 				{
-					var page = _pager.Read(null, readPosition);
+					var page = _pager.Read(readPosition);
 
 					transactionPageTranslation[page.PageNumber] = readPosition;
 

@@ -85,7 +85,7 @@ namespace Voron.Impl
 				_fileStream.Flush(true);
 		}
 
-		public override int Write(Page page)
+		protected override int Write(Page page)
 		{
 			var position = page.PageNumber * PageSize;
 

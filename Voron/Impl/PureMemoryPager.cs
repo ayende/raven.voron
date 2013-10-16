@@ -43,7 +43,7 @@ namespace Voron.Impl
 		}
 
 
-	    public override int Write(Page page)
+	    protected override int Write(Page page)
 	    {
 			var toWrite = page.IsOverflow ? page.OverflowSize : PageSize;
 

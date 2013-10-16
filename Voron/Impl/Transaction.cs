@@ -117,10 +117,10 @@ namespace Voron.Impl
                 page = c.GetPage(dirtyPageNum);
 			    
 				if(page == null)
-                    page = _log.ReadPage(this, dirtyPageNum);
+                    page = _log.ReadPage(dirtyPageNum);
 
 				if (page == null)
-					page = _dataPager.Read(this, dirtyPageNum);
+					page = _dataPager.Read(dirtyPageNum);
 
                 page.Dirty = true;
 				
@@ -130,7 +130,7 @@ namespace Voron.Impl
 			}
 			var newPage = AllocatePage(1);
 			var newPageNum = newPage.PageNumber;
-			page = c.GetPage(p) ?? _log.ReadPage(this, p) ?? _dataPager.Read(this, p);
+			page = c.GetPage(p) ?? _log.ReadPage(p) ?? _dataPager.Read(p);
 			NativeMethods.memcpy(newPage.Base, page.Base, _dataPager.PageSize);
 			newPage.LastSearchPosition = page.LastSearchPosition;
 			newPage.LastMatch = page.LastMatch;
@@ -159,7 +159,7 @@ namespace Voron.Impl
 			if (_dirtyPages.TryGetValue(n, out dirtyPage))
 				n = dirtyPage;
 
-			return _log.ReadPage(this, n) ?? _dataPager.Read(this, n);
+			return _log.ReadPage(n) ?? _dataPager.Read(n);
 		}
 
 		private long? TryAllocateFromFreeSpace(int numberOfPages)
@@ -322,7 +322,7 @@ namespace Voron.Impl
 		{
 			_dirtyPages.Remove(pageNumber);
 
-			Debug.Assert(pageNumber >= 2);//TODO arek && pageNumber <= _dataPager.NumberOfAllocatedPages);
+			Debug.Assert(pageNumber >= 2);
 			Debug.Assert(_freedPages.Contains(pageNumber) == false);
 
 			_freedPages.Add(pageNumber);

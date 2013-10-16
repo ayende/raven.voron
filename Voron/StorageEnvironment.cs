@@ -74,8 +74,8 @@ namespace Voron
 				_dataPager.EnsureContinuous(null, 0, 2); // for file headers
 
 				// write empty file headers
-				_log.WriteFileHeader(0);
-				_log.WriteFileHeader(1);
+				_log.WriteFileHeader(null, 0);
+				_log.WriteFileHeader(null, 1);
 
 				//var freeSpaceHeader = new FreeSpaceHeader
 				//	{
@@ -237,8 +237,8 @@ namespace Voron
 
         private FileHeader* FindLatestFileHeaderEntry()
         {
-            Page fst = _dataPager.Read(null, 0);
-            Page snd = _dataPager.Read(null, 1);
+            Page fst = _dataPager.Read(0);
+            Page snd = _dataPager.Read(1);
 
             FileHeader* e1 = GetFileHeaderFrom(fst);
             FileHeader* e2 = GetFileHeaderFrom(snd);
@@ -352,7 +352,7 @@ namespace Voron
                 {
                     txr = NewTransaction(TransactionFlags.Read); // now have snapshot view
                     nextPageNumber = txw.NextPageNumber;
-                    var firstPage = _dataPager.Read(txw, 0);
+                    var firstPage = _dataPager.Read(0);
                     using (var headerStream = new UnmanagedMemoryStream(firstPage.Base, _dataPager.PageSize*2))
                     {
                         while (headerStream.Position < headerStream.Length)
@@ -364,7 +364,7 @@ namespace Voron
                     //txw.Commit(); intentionally not committing
                 }
                 // now can copy everything else
-                var firtDataPage = _dataPager.Read(txr, 2);
+                var firtDataPage = _dataPager.Read(2);
                 using (
                     var headerStream = new UnmanagedMemoryStream(firtDataPage.Base, _dataPager.PageSize*(nextPageNumber - 2))
                     )
@@ -384,12 +384,17 @@ namespace Voron
             }
         }
 
-		private void FlushLogToDataFile(object state)
+		private void FlushLogToDataFile(object state = null)
 		{
 			if(_activeTransactions.Count(x => x.Value.Flags == TransactionFlags.ReadWrite) > 0)
 				return;
 
-			_log.ApplyLogsToDataFile();
+			using (var tx = NewTransaction(TransactionFlags.ReadWrite))
+			{
+				_log.ApplyLogsToDataFile(tx);
+
+				// tx.Commit(); intentionally not committing
+			}
 		}
 
         public Dictionary<string, List<long>> AllPages(Transaction tx)

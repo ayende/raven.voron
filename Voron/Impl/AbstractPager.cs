@@ -36,13 +36,13 @@ namespace Voron.Impl
 
         public long NumberOfAllocatedPages { get; protected set; }
 
-        public Page Read(Transaction tx, long pageNumber)
+        public Page Read(long pageNumber)
         {
             if (pageNumber + 1 > NumberOfAllocatedPages)
             {
-                throw new InvalidOperationException("Cannot increase size of the pager when errorOnChange is set to true");
+                throw new InvalidOperationException("Cannot increase size of the pager");
             }
-            //EnsureContinuous(tx, pageNumber, 1);
+
 			return new Page(AcquirePagePointer(pageNumber), PageMaxSpace);
         }
 
@@ -98,7 +98,14 @@ namespace Voron.Impl
 			}
         }
 
-        public abstract int Write(Page page);
+	    protected abstract int Write(Page page);
+
+        public int Write(Transaction tx, Page page)
+        {
+	        EnsureContinuous(tx, page.PageNumber, page.IsOverflow ? Page.GetNumberOfOverflowPages(PageSize, page.OverflowSize) : 1);
+
+	        return Write(page);
+        }
 
         public void EnsureFreeSpaceTrackingHasEnoughSpace(Transaction tx, int pageCount)
 		{
