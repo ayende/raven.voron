@@ -155,7 +155,7 @@ namespace Voron.Trees
             return dataPos;
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        //[MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void IncrementItemCountIfNecessary()
         {
             if (_len > -1)
