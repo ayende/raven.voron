@@ -22,7 +22,10 @@ namespace Voron.Tests.Storage
 						                                        logPagers[logName] = pager;
 						                                        return pager;
 					                                        },
-				                                        ownsPagers: false))
+				                                        new StorageOptions()
+					                                        {
+						                                        OwnsPagers = false
+					                                        }))
 				{
 					using (var tx = env.NewTransaction(TransactionFlags.ReadWrite))
 					{
@@ -41,7 +44,7 @@ namespace Voron.Tests.Storage
 						if (logPagers.ContainsKey(logName))
 							return logPagers[logName];
 						return new PureMemoryPager();
-					}))
+					}, new StorageOptions()))
 				{
 					using (var tx = env.NewTransaction(TransactionFlags.Read))
 					{

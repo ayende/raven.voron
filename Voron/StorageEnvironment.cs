@@ -21,7 +21,7 @@ namespace Voron
         private readonly ConcurrentDictionary<string, Tree> _trees
             = new ConcurrentDictionary<string, Tree>(StringComparer.OrdinalIgnoreCase);
 
-        private readonly bool _ownsPagers;
+	    private readonly StorageOptions _options;
         private readonly IVirtualPager _dataPager;
         private readonly SliceComparer _sliceComparer;
 
@@ -39,16 +39,16 @@ namespace Voron
             return new SnapshotReader(NewTransaction(TransactionFlags.Read));
         }
 
-		public StorageEnvironment(IVirtualPager dataPager, Func<string, IVirtualPager> createLogFilePager, bool ownsPagers = true)
+		public StorageEnvironment(IVirtualPager dataPager, Func<string, IVirtualPager> createLogFilePager, StorageOptions options)
 		{
 			try
 			{
 				_dataPager = dataPager;
-				_ownsPagers = ownsPagers;
+				_options = options;
 				_sliceComparer = NativeMethods.memcmp;
 				FreeSpaceHandling = new BinaryFreeSpaceStrategy(n => new IntPtr(_dataPager.AcquirePagePointer(n)));
 
-				_log = new WriteAheadLog(this, createLogFilePager, _dataPager, disposeLogFiles: _ownsPagers);
+				_log = new WriteAheadLog(this, createLogFilePager, _dataPager, options.LogFileSize, disposeLogFiles: options.OwnsPagers);
 				
 				Setup();
 
@@ -158,7 +158,12 @@ namespace Voron
 
 		public BinaryFreeSpaceStrategy FreeSpaceHandling { get; set; }
 
-        public Tree GetTree(Transaction tx, string name)
+	    public WriteAheadLog Log
+	    {
+		    get { return _log; }
+	    }
+
+	    public Tree GetTree(Transaction tx, string name)
         {
             Tree tree;
             if (_trees.TryGetValue(name, out tree))
@@ -229,7 +234,7 @@ namespace Voron
 				activeTransaction.Value.Dispose();
 			}
 
-			if (_ownsPagers)
+			if (_options.OwnsPagers)
 				_dataPager.Dispose();
 
 			_log.Dispose();
@@ -384,7 +389,7 @@ namespace Voron
             }
         }
 
-		private void FlushLogToDataFile(object state = null)
+		internal void FlushLogToDataFile(object state = null)
 		{
 			if(_activeTransactions.Count(x => x.Value.Flags == TransactionFlags.ReadWrite) > 0)
 				return;

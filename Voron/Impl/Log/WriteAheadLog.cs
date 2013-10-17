@@ -19,28 +19,36 @@ namespace Voron.Impl.Log
 		private readonly Func<string, IVirtualPager> _createLogFilePager;
 		private readonly IVirtualPager _dataPager;
 		private readonly List<LogFile> _logFiles = new List<LogFile>();
-		private readonly List<LogFile> _scheduledToFlush = new List<LogFile>();
+		internal List<LogFile> _scheduledToFlush = new List<LogFile>();
 		private readonly Func<long, string> _logName = number => string.Format("{0:D19}.txlog", number);
 		private readonly bool _disposeLogFiles;
-		private LogFile _currentFile;
+		internal LogFile _currentFile;
 		private LogFile _splitLogFile;
 		private long _logIndex = -1;
 		private FileHeader* _fileHeader;
 		private IntPtr _inMemoryHeader;
 		private long _dataFlushCounter = 0;
 
-		public WriteAheadLog(StorageEnvironment env, Func<string, IVirtualPager> createLogFilePager, IVirtualPager dataPager, bool disposeLogFiles = true)
+		public WriteAheadLog(StorageEnvironment env, Func<string, IVirtualPager> createLogFilePager, IVirtualPager dataPager, long logFileSize, bool disposeLogFiles = true)
 		{
 			_env = env;
 			_createLogFilePager = createLogFilePager;
 			_dataPager = dataPager;
 			_disposeLogFiles = disposeLogFiles;
+			LogFileSize = logFileSize;
 			_fileHeader = GetEmptyFileHeader();
 		}
 
-		public long LogFileSize
+		public long LogFileSize { get; private set; }
+
+		public int FilesInUse
 		{
-			get { return 64*1024*1024; }
+			get { return _logFiles.Count; }
+		}
+
+		public LogInfo Info
+		{
+			get { return _fileHeader->LogInfo; }
 		}
 
 		private LogFile NextFile(Transaction tx)
@@ -48,6 +56,7 @@ namespace Voron.Impl.Log
 			_logIndex++;
 
 			var logPager = _createLogFilePager(_logName(_logIndex));
+
 			logPager.AllocateMorePages(tx, LogFileSize);
 
 			var log = new LogFile(logPager, _logIndex);
@@ -141,36 +150,33 @@ namespace Voron.Impl.Log
 			if(_currentFile == null)
 				 _currentFile = NextFile(tx);
 
-			if(_currentFile.AvailablePages == 0) // it must have at least one page for the transaction header
-			{
-				//TODO we need to write a test for this edge condition
-
-				var fullLogFile = _currentFile;
-				_currentFile = NextFile(tx);
-				ScheduleFlush(fullLogFile);
-			}
-
 			_currentFile.TransactionBegin(tx);
 		}
 
 		public void TransactionCommit(Transaction tx)
 		{
-			_currentFile.TransactionCommit(tx);
-
 			if (_splitLogFile != null)
 			{
 				_splitLogFile.TransactionCommit(tx);
 				ScheduleFlush(_splitLogFile);
 				_splitLogFile = null;
 			}
+
+			_currentFile.TransactionCommit(tx);
+
+			if (_currentFile.AvailablePages == 0) // it must have at least one page for the next transaction header
+			{
+				ScheduleFlush(_currentFile);
+				_currentFile = null; // it will force new log file creation when next transaction will start
+			}
 		}
 
-		public Page ReadPage(long pageNumber)
+		public Page ReadPage(Transaction tx, long pageNumber)
 		{
 			// read log files from the back to get the most recent version of page
 			for (var i = _logFiles.Count - 1; i >= 0; i--)
 			{
-				var page = _logFiles[i].ReadPage(pageNumber);
+				var page = _logFiles[i].ReadPage(tx, pageNumber);
 				if (page != null)
 					return page;
 			}
@@ -188,7 +194,7 @@ namespace Voron.Impl.Log
 
 				// here we need to mark that transaction is split in both log files
 				// it will have th following transaction markers in the headers
-				// log_1: [Start|Split] log_2: [Split|End]
+				// log_1: [Start|Split] log_2: [Split|Commit]
 
 				_currentFile.TransactionSplit(tx);
 				_splitLogFile = _currentFile;
@@ -199,16 +205,6 @@ namespace Voron.Impl.Log
 			}
 
 			return _currentFile.Allocate(startPage, numberOfPages);
-		}
-
-		public void Sync()
-		{
-			if (_splitLogFile != null)
-			{
-				_splitLogFile.Sync();
-			}
-
-			_currentFile.Sync();
 		}
 
 		public void ApplyLogsToDataFile(Transaction tx)
@@ -225,7 +221,7 @@ namespace Voron.Impl.Log
 				{
 					if (pagesToWrite.ContainsKey(pageNumber) == false)
 					{
-						pagesToWrite[pageNumber] = _scheduledToFlush[i].ReadPage(pageNumber);
+						pagesToWrite[pageNumber] = _scheduledToFlush[i].ReadPage(tx, pageNumber);
 					}
 				}
 			}

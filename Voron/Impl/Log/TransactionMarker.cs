@@ -14,6 +14,6 @@ namespace Voron.Impl.Log
 		None = 0x0,
 		Start = 0x1,
 		Split = 0x2,
-		End = 0x4,
+		Commit = 0x4,
 	}
 }

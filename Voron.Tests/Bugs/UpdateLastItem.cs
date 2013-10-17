@@ -22,7 +22,10 @@ namespace Voron.Tests.Bugs
 						                                        logPagers[logName] = p;
 						                                        return p;
 					                                        }, 
-														ownsPagers: false))
+														new StorageOptions()
+															{
+																OwnsPagers = false
+															}))
 				{
 					using (var tx = env.NewTransaction(TransactionFlags.ReadWrite))
 					{
@@ -46,7 +49,7 @@ namespace Voron.Tests.Bugs
 																	return logPagers[logName];
 																return new PureMemoryPager();
 															}, 
-														ownsPagers: false))
+														new StorageOptions()))
 				using (var tx = env.NewTransaction(TransactionFlags.ReadWrite))
 				{
 					env.Root.DirectAdd(tx, "events", sizeof (TreeRootHeader));

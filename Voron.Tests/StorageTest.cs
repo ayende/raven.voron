@@ -10,7 +10,7 @@ namespace Voron.Tests
 {
     public abstract class StorageTest : IDisposable
     {
-        private readonly StorageEnvironment _storageEnvironment;
+        private StorageEnvironment _storageEnvironment;
         private IVirtualPager _pager;
 
 	    private readonly Func<string, IVirtualPager> _createLogFilePager =
@@ -21,12 +21,25 @@ namespace Voron.Tests
             get { return _storageEnvironment; }
         }
 
+	    private StorageOptions _options = new StorageOptions();
+
         protected StorageTest()
         {
             FilePager();
-            //_pager = new PureMemoryPager();
-            _storageEnvironment = new StorageEnvironment(_pager, _createLogFilePager);
+            CreateStorage();
         }
+
+	    private void CreateStorage()
+	    {
+			Configure(_options, _pager);
+
+		    _storageEnvironment = new StorageEnvironment(_pager, _createLogFilePager, _options);
+	    }
+
+	    protected virtual void Configure(StorageOptions options, IVirtualPager pager)
+		{
+			
+		}
 
         private void FilePager()
         {

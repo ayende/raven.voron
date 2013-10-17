@@ -19,6 +19,7 @@ namespace Voron.Impl.Log
 
 		private readonly IVirtualPager _pager;
 		private readonly Dictionary<long, long> _pageTranslationTable = new Dictionary<long, long>();
+		private readonly Dictionary<long, long> _transactionPageTranslationTable = new Dictionary<long, long>();
 		private long _writePage = 0;
 		private long _lastSyncedPage = -1;
 		private int _allocatedPagesInTransaction = 0;
@@ -47,6 +48,11 @@ namespace Voron.Impl.Log
 			get { return _lastSyncedPage; }
 		}
 
+		internal long WritePagePosition
+		{
+			get { return _writePage; }
+		}
+
 		public IEnumerable<long> ModifiedPageNumbers
 		{
 			get { return _pageTranslationTable.Keys; }
@@ -54,6 +60,13 @@ namespace Voron.Impl.Log
 
 		public void TransactionBegin(Transaction tx)
 		{
+			if (_currentTxHeader != null)
+			{
+				// last transaction did not commit, we need to move back the write page position
+				Debug.Assert(_currentTxHeader->TxMarker.HasFlag(TransactionMarker.Commit) == false);
+				_writePage = _lastSyncedPage + 1;
+			}
+
 			_currentTxHeader = GetTransactionHeader();
 
 			_currentTxHeader->TxId = tx.Id;
@@ -65,6 +78,8 @@ namespace Voron.Impl.Log
 
 			_allocatedPagesInTransaction = 0;
 			_overflowPagesInTransaction = 0;
+
+			_transactionPageTranslationTable.Clear();
 		}
 
 		public void TransactionSplit(Transaction tx)
@@ -87,11 +102,16 @@ namespace Voron.Impl.Log
 
 		public void TransactionCommit(Transaction tx)
 		{
+			foreach (var translation in _transactionPageTranslationTable)
+			{
+				_pageTranslationTable[translation.Key] = translation.Value;
+			}
+
 			LastCommittedTransactionId = tx.Id;
 			LastPageNumberOfLastCommittedTransaction = tx.NextPageNumber - 1;
 
 			_currentTxHeader->LastPageNumber = LastPageNumberOfLastCommittedTransaction;
-			_currentTxHeader->TxMarker |= TransactionMarker.End;
+			_currentTxHeader->TxMarker |= TransactionMarker.Commit;
 			_currentTxHeader->PageCount = _allocatedPagesInTransaction;
 			_currentTxHeader->OverflowPageCount = _overflowPagesInTransaction;
 			tx.Environment.Root.State.CopyTo(&_currentTxHeader->Root);
@@ -104,6 +124,8 @@ namespace Voron.Impl.Log
 			//TODO free space copy
 
 			_currentTxHeader = null;
+
+			Sync();
 		}
 
 		public long LastCommittedTransactionId { get; private set; }
@@ -112,9 +134,6 @@ namespace Voron.Impl.Log
 
 		private TransactionHeader* GetTransactionHeader()
 		{
-			if (_lastSyncedPage != _writePage - 1)
-				_writePage = _lastSyncedPage + 1;
-
 			var result = (TransactionHeader*) Allocate(-1, pagesTakenByHeader).Base;
 			result->HeaderMarker = Constants.TransactionHeaderMarker;
 			result->PageNumberInLogFile = _writePage - pagesTakenByHeader;
@@ -124,10 +143,10 @@ namespace Voron.Impl.Log
 
 		public long AvailablePages
 		{
-			get { return _pager.NumberOfAllocatedPages - _writePage - 1; }
+			get { return _pager.NumberOfAllocatedPages - _writePage; }
 		}
 
-		public void Sync()
+		private void Sync()
 		{
 			var start = _lastSyncedPage + 1;
 			var count = _writePage - start;
@@ -138,10 +157,14 @@ namespace Voron.Impl.Log
 			_lastSyncedPage += count;
 		}
 
-		public Page ReadPage(long pageNumber)
+		public Page ReadPage(Transaction tx, long pageNumber)
 		{
 			if (_pageTranslationTable.ContainsKey(pageNumber) == false)
+			{
+				if (_currentTxHeader != null && _currentTxHeader->TxId == tx.Id && _transactionPageTranslationTable.ContainsKey(pageNumber))
+					return _pager.Read(_transactionPageTranslationTable[pageNumber]);
 				return null;
+			}
 
 			return _pager.Read(_pageTranslationTable[pageNumber]);
 		}
@@ -156,7 +179,7 @@ namespace Voron.Impl.Log
 			{
 				// we allocate more than one page only if the page is an overflow
 				// so here we don't want to create mapping for them too
-				_pageTranslationTable[startPage] = _writePage;
+				_transactionPageTranslationTable[startPage] = _writePage;
 
 				_allocatedPagesInTransaction++;
 
@@ -191,7 +214,7 @@ namespace Voron.Impl.Log
 
 				ValidateHeader(current, lastReadHeader);
 
-				if (current->TxMarker.HasFlag(TransactionMarker.End) == false && current->TxMarker.HasFlag(TransactionMarker.Split) == false)
+				if (current->TxMarker.HasFlag(TransactionMarker.Commit) == false && current->TxMarker.HasFlag(TransactionMarker.Split) == false)
 				{
 					readPosition += current->PageCount + current->OverflowPageCount;
 					continue;
