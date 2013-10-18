@@ -83,6 +83,11 @@ namespace Voron.Impl
 
 			if(flags == TransactionFlags.ReadWrite)
 				_log.TransactionBegin(this);
+
+			foreach (var tree in env.Trees)
+			{
+				GetTreeInformation(tree);
+			}
 		}
 
 		public Page ModifyCursor(Tree tree, Cursor c)

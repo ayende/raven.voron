@@ -6,35 +6,35 @@ using Voron.Trees;
 
 namespace Voron.Impl
 {
-    public unsafe abstract class AbstractPager : IVirtualPager
-    {
-        protected const int MinIncreaseSize = 1 * 1024 * 1024;
+	public unsafe abstract class AbstractPager : IVirtualPager
+	{
+		protected const int MinIncreaseSize = 1 * 1024 * 1024;
 
-        private long _increaseSize = MinIncreaseSize;
-        private DateTime _lastIncrease;
-        private IntPtr _tempPage;
-        public PagerState PagerState { get; protected set; }
+		private long _increaseSize = MinIncreaseSize;
+		private DateTime _lastIncrease;
+		private IntPtr _tempPage;
+		public PagerState PagerState { get; protected set; }
 
-        protected AbstractPager()
-        {
-            MaxNodeSize = (PageSize - Constants.PageHeaderSize) / Constants.MinKeysInPage;
-            PageMaxSpace = PageSize - Constants.PageHeaderSize;
-            PageMinSpace = (int)(PageMaxSpace * 0.33);
-            PagerState = new PagerState();
-            _tempPage = Marshal.AllocHGlobal(PageSize);
-           PagerState.AddRef();
-        }
+		protected AbstractPager()
+		{
+			MaxNodeSize = (PageSize - Constants.PageHeaderSize) / Constants.MinKeysInPage;
+			PageMaxSpace = PageSize - Constants.PageHeaderSize;
+			PageMinSpace = (int)(PageMaxSpace * 0.33);
+			PagerState = new PagerState();
+			_tempPage = Marshal.AllocHGlobal(PageSize);
+			PagerState.AddRef();
+		}
 
-        public int PageMaxSpace { get; private set; }
-        public int MaxNodeSize { get; private set; }
-        public int PageMinSpace { get; private set; }
+		public int PageMaxSpace { get; private set; }
+		public int MaxNodeSize { get; private set; }
+		public int PageMinSpace { get; private set; }
 
-        public int PageSize
-        {
-            get { return 4096; }
-        }
+		public int PageSize
+		{
+			get { return 4096; }
+		}
 
-        public long NumberOfAllocatedPages { get; protected set; }
+		public long NumberOfAllocatedPages { get; protected set; }
 
         public Page Read(long pageNumber)
         {
@@ -58,15 +58,16 @@ namespace Voron.Impl
 		}
 
 	    public abstract byte* AcquirePagePointer(long pageNumber);
-	    public abstract void Flush(long startPage, long count);
-        public abstract void Sync();
 
-        public virtual PagerState TransactionBegan()
-        {
-            var state = PagerState;
-            state.AddRef();
-            return state;
-        }
+	    public abstract void Flush(long startPage, long count);
+		public abstract void Sync();
+
+		public virtual PagerState TransactionBegan()
+		{
+			var state = PagerState;
+			state.AddRef();
+			return state;
+		}
 
         public virtual void EnsureContinuous(Transaction tx, long requestedPageNumber, int pageCount)
         {
@@ -97,6 +98,16 @@ namespace Voron.Impl
 				EnsureFreeSpaceTrackingHasEnoughSpace(tx, pageCount);
 			}
         }
+
+		public bool ShouldGoToOverflowPage(int len)
+		{
+			return len + Constants.PageHeaderSize > MaxNodeSize;
+		}
+
+		public int GetNumberOfOverflowPages(Transaction tx, int overflowSize)
+		{
+			return (tx.Environment.PageSize - 1 + overflowSize) / (tx.Environment.PageSize) + 1;
+		}
 
 	    protected abstract int Write(Page page);
 
@@ -225,5 +236,5 @@ namespace Voron.Impl
 
 	        return current + actualIncrease;
         }
-    }
+	}
 }

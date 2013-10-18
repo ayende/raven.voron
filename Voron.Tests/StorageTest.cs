@@ -8,7 +8,9 @@ using Voron.Trees;
 
 namespace Voron.Tests
 {
-    public abstract class StorageTest : IDisposable
+	using System.Collections.Generic;
+
+	public abstract class StorageTest : IDisposable
     {
         private StorageEnvironment _storageEnvironment;
         private IVirtualPager _pager;
@@ -74,7 +76,7 @@ namespace Voron.Tests
                 RenderAndShow(tx, Env.GetTree(tx, name), showEntries);
         }
 
-        private void RenderAndShow(Transaction tx, Tree root, int showEntries = 25)
+        protected void RenderAndShow(Transaction tx, Tree root, int showEntries = 25)
         {
             if (Debugger.IsAttached == false)
                 return;
@@ -107,5 +109,22 @@ namespace Voron.Tests
                                               (ushort) node->DataSize));
             }
         }
+
+		protected IList<Tree> CreateTrees(StorageEnvironment env, int number, string prefix)
+		{
+			var results = new List<Tree>();
+
+			using (var tx = env.NewTransaction(TransactionFlags.ReadWrite))
+			{
+				for (var i = 0; i < number; i++)
+				{
+					results.Add(env.CreateTree(tx, prefix + i));
+				}
+
+				tx.Commit();
+			}
+
+			return results;
+		}
     }
 }

@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Data;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using Voron.Debugging;
 using Voron.Impl;
 using Voron.Impl.FileHeaders;
@@ -33,31 +34,31 @@ namespace Voron.Trees
 		public static Tree Open(Transaction tx, SliceComparer cmp, TreeRootHeader* header)
 		{
 			return new Tree(cmp, header->RootPageNumber)
+			{
+				_state =
 				{
-					_state =
-						{
-							PageCount = header->PageCount,
-							BranchPages = header->BranchPages,
-							Depth = header->Depth,
-							OverflowPages = header->OverflowPages,
-							LeafPages = header->LeafPages,
-							EntriesCount = header->EntriesCount,
-							Flags = header->Flags
-						}
-				};
+					PageCount = header->PageCount,
+					BranchPages = header->BranchPages,
+					Depth = header->Depth,
+					OverflowPages = header->OverflowPages,
+					LeafPages = header->LeafPages,
+					EntriesCount = header->EntriesCount,
+					Flags = header->Flags
+				}
+			};
 		}
 
 		public static Tree Create(Transaction tx, SliceComparer cmp, TreeFlags flags = TreeFlags.None)
 		{
 			var newRootPage = NewPage(tx, PageFlags.Leaf);
 			var tree = new Tree(cmp, newRootPage.PageNumber)
+			{
+				_state =
 				{
-					_state =
-						{
-							Depth = 1,
-							Flags = flags
-						}
-				};
+					Depth = 1,
+					Flags = flags
+				}
+			};
 			var txInfo = tx.GetTreeInformation(tree);
 			txInfo.RecordNewPage(newRootPage, 1);
 			return tree;
@@ -145,6 +146,9 @@ namespace Voron.Trees
 				var item = page.GetNode(page.LastSearchPosition);
 
 				CheckConcurrency(key, version, item->Version, TreeActionType.Add);
+				var existingValue = new Slice(DirectRead(tx, key), (ushort)item->DataSize);
+				if (existingValue.Compare(value, _cmp) == 0)
+					return; //nothing to do, the exact value is already there				
 
 				if (item->Flags == NodeFlags.MultiValuePageRef)
 				{
@@ -406,7 +410,7 @@ namespace Voron.Trees
 			}
 		}
 
-		public TreeIterator Iterate(Transaction tx)
+		public TreeIterator Iterate(Transaction tx, WriteBatch writeBatch = null)
 		{
 			return new TreeIterator(this, tx, _cmp);
 		}
@@ -423,10 +427,8 @@ namespace Voron.Trees
 
 				var item = new Slice(node);
 
-				if (item.Compare(key, _cmp) != 0)
-					return null;
-
-				return new ReadResult(NodeHeader.Stream(tx, node), node->Version);
+				return item.Compare(key, _cmp) == 0 ?
+					new ReadResult(NodeHeader.Stream(tx, node), node->Version) : null;
 			}
 		}
 
@@ -437,7 +439,7 @@ namespace Voron.Trees
 				var p = FindPageFor(tx, key, cursor);
 				var node = p.Search(key, _cmp);
 
-				if (node == null)
+				if (node == null || new Slice(node).Compare(key, _cmp) != 0)
 					return -1;
 
 				return node->DataSize;
@@ -452,7 +454,7 @@ namespace Voron.Trees
 				var p = FindPageFor(tx, key, cursor);
 				var node = p.Search(key, _cmp);
 
-				if (node == null)
+				if (node == null || new Slice(node).Compare(key, _cmp) != 0)
 					return 0;
 
 				return node->Version;

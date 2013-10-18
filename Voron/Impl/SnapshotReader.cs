@@ -1,6 +1,7 @@
 ﻿namespace Voron.Impl
 {
 	using System;
+	using System.IO;
 
 	using Voron.Trees;
 
@@ -16,8 +17,25 @@
 
 		public Transaction Transaction { get; private set; }
 
-		public ReadResult Read(string treeName, Slice key)
+		public ReadResult Read(string treeName, Slice key, WriteBatch writeBatch = null)
 		{
+			if (writeBatch != null)
+			{
+				WriteBatch.BatchOperationType operationType;
+				ReadResult result;
+				if (writeBatch.TryGetValue(treeName, key, out result, out operationType))
+				{
+					switch (operationType)
+					{
+						case WriteBatch.BatchOperationType.Add:
+							//when the returned ReadResult is disposed - prevent from stream currently in WriteBatch to be disposed as well
+							return new ReadResult(CloneStream(result.Stream), (ushort)(result.Version + 1));
+						case WriteBatch.BatchOperationType.Delete:
+							return null;
+					}
+				}
+			}
+
 			var tree = GetTree(treeName);
 			return tree.Read(Transaction, key);
 		}
@@ -28,16 +46,57 @@
 			return tree.GetDataSize(Transaction, key);
 		}
 
-		public ushort ReadVersion(string treeName, Slice key)
+		//similar to read version, but ReadVersion returns 0 for items that are in WriteBatch
+		public bool Contains(string treeName, Slice key, WriteBatch writeBatch = null)
 		{
+			if (writeBatch != null)
+			{
+				WriteBatch.BatchOperationType operationType;
+				ReadResult result;
+				if (writeBatch.TryGetValue(treeName, key, out result, out operationType))
+				{
+					switch (operationType)
+					{
+						case WriteBatch.BatchOperationType.Add:
+							//when the returned ReadResult is disposed - prevent from stream currently in WriteBatch to be disposed as well
+							return true;
+						case WriteBatch.BatchOperationType.Delete:
+							return false;
+					}
+				}
+			}
+
+			var tree = GetTree(treeName);
+			return tree.ReadVersion(Transaction, key) > 0;
+
+		}
+
+		public ushort ReadVersion(string treeName, Slice key, WriteBatch writeBatch = null)
+		{
+			if (writeBatch != null)
+			{
+				WriteBatch.BatchOperationType operationType;
+				ReadResult result;
+				if (writeBatch.TryGetValue(treeName, key, out result, out operationType))
+				{
+					switch (operationType)
+					{
+						case WriteBatch.BatchOperationType.Add:
+							return (result.Version == 0) ? (ushort)0 : (ushort)(result.Version + 1);
+						case WriteBatch.BatchOperationType.Delete:
+							return 0;
+					}
+				}
+			}
+
 			var tree = GetTree(treeName);
 			return tree.ReadVersion(Transaction, key);
 		}
 
-		public TreeIterator Iterate(string treeName)
+		public IIterator Iterate(string treeName, WriteBatch writeBatch = null)
 		{
 			var tree = GetTree(treeName);
-			return tree.Iterate(Transaction);
+			return tree.Iterate(Transaction, writeBatch);
 		}
 
 		public void Dispose()
@@ -56,6 +115,18 @@
 		{
 			var tree = treeName == null ? _env.Root : Transaction.Environment.GetTree(Transaction, treeName);
 			return tree;
+		}
+
+		private static Stream CloneStream(Stream source)
+		{
+			var sourcePosition = source.Position;
+			var destination = new MemoryStream();
+
+			source.CopyTo(destination);
+			destination.Position = sourcePosition;
+			source.Position = sourcePosition;
+
+			return destination;
 		}
 	}
 }

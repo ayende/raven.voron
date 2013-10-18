@@ -4,6 +4,7 @@
 //  </copyright>
 // -----------------------------------------------------------------------
 
+using System;
 using System.Runtime.CompilerServices;
 
 namespace Voron.Util
@@ -147,7 +148,16 @@ namespace Voron.Util
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static uint Value(byte* data, int offset, int count)
 		{
-			return Extend(0, data, offset, count);
+			try
+			{
+				return Extend(0, data, offset, count);
+			}
+			catch (Exception)
+			{
+				
+				throw;
+			}
+			
 		}
 
 		private readonly static uint[] Table_0 = new uint[256]

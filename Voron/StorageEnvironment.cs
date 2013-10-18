@@ -62,7 +62,7 @@ namespace Voron
             catch (Exception)
             {
                 Dispose();
-	            throw;
+                throw;
             }
         }
 
@@ -157,6 +157,11 @@ namespace Voron
         }
 
 		public BinaryFreeSpaceStrategy FreeSpaceHandling { get; set; }
+
+	    public IEnumerable<Tree> Trees
+	    {
+		    get { return _trees.Values; }
+	    }
 
 	    public WriteAheadLog Log
 	    {
