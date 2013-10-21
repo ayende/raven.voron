@@ -13,6 +13,12 @@ using Voron.Util;
 
 namespace Voron.Impl.Log
 {
+	public class TransactionInLog
+	{
+		public long Id;
+		public long LastPageNumber;
+	}
+
 	public unsafe class LogFile : IDisposable
 	{
 		private const int pagesTakenByHeader = 1;
@@ -31,6 +37,8 @@ namespace Voron.Impl.Log
 			Number = logNumber;
 			_pager = pager;
 			_writePage = 0;
+
+			LastCommittedTransaction = new TransactionInLog();
 		}
 
 		public LogFile(IVirtualPager pager, long logNumber, long lastSyncedPage)
@@ -58,6 +66,8 @@ namespace Voron.Impl.Log
 			get { return _pageTranslationTable.Keys; }
 		}
 
+		public TransactionInLog LastCommittedTransaction { get; set; }
+
 		public bool LastTransactionCommitted
 		{
 			get
@@ -67,7 +77,6 @@ namespace Voron.Impl.Log
 					Debug.Assert(_currentTxHeader->TxMarker.HasFlag(TransactionMarker.Commit) == false);
 					return false;
 				}
-
 				return true;
 			}
 		}
@@ -120,10 +129,10 @@ namespace Voron.Impl.Log
 				_pageTranslationTable[translation.Key] = translation.Value;
 			}
 
-			LastCommittedTransactionId = tx.Id;
-			LastPageNumberOfLastCommittedTransaction = tx.NextPageNumber - 1;
+			LastCommittedTransaction.Id = tx.Id;
+			LastCommittedTransaction.LastPageNumber = tx.NextPageNumber - 1;
 
-			_currentTxHeader->LastPageNumber = LastPageNumberOfLastCommittedTransaction;
+			_currentTxHeader->LastPageNumber = tx.NextPageNumber - 1;
 			_currentTxHeader->TxMarker |= TransactionMarker.Commit;
 			_currentTxHeader->PageCount = _allocatedPagesInTransaction;
 			_currentTxHeader->OverflowPageCount = _overflowPagesInTransaction;
@@ -141,9 +150,6 @@ namespace Voron.Impl.Log
 			Sync();
 		}
 
-		public long LastCommittedTransactionId { get; private set; }
-
-		public long LastPageNumberOfLastCommittedTransaction { get; private set; }
 
 		private TransactionHeader* GetTransactionHeader()
 		{

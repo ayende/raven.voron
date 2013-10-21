@@ -114,8 +114,8 @@ namespace Voron.Impl.Log
 
 		public void UpdateFileHeaderAfterDataFileSync(LogFile lastSyncedLog)
 		{
-			_fileHeader->TransactionId = lastSyncedLog.LastCommittedTransactionId;
-			_fileHeader->LastPageNumber = lastSyncedLog.LastPageNumberOfLastCommittedTransaction;
+			_fileHeader->TransactionId = lastSyncedLog.LastCommittedTransaction.Id;
+			_fileHeader->LastPageNumber = lastSyncedLog.LastCommittedTransaction.LastPageNumber;
 
 			_fileHeader->LogInfo.LastSyncedLog = lastSyncedLog.Number;
 			_fileHeader->LogInfo.LastSyncedPage = lastSyncedLog.LastSyncedPage;
