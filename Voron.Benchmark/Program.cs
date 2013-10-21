@@ -13,7 +13,8 @@ namespace Voron.Benchmark
         private static HashSet<long> _randomNumbers;
         public const int ItemsPerTransaction = 100;
         private const int Transactions = 500;
-        private const string Path = @"e:\data\bench.data";
+		private const string DataDir = @"e:\data\";
+        private const string Path = DataDir + "bench.data";
 
         public static void Main()
         {
@@ -87,7 +88,7 @@ namespace Voron.Benchmark
 				if (File.Exists(Path))
 					File.Delete(Path);
 
-				foreach (var txLogFile in Directory.GetFiles(".", "*.txlog"))
+				foreach (var txLogFile in Directory.GetFiles(DataDir, "*.txlog"))
 					File.Delete(txLogFile);
             }
             else
@@ -102,7 +103,7 @@ namespace Voron.Benchmark
         private static void FillRandomOneTransaction(Stopwatch sw, FlushMode flushMode)
         {
             var memoryMapPager = new FilePager(Path, flushMode);
-			using (var env = new StorageEnvironment(memoryMapPager, file => new MemoryMapPager(file, flushMode), new StorageOptions()))
+			using (var env = new StorageEnvironment(memoryMapPager, file => new MemoryMapPager(DataDir + file, flushMode), new StorageOptions()))
             {
                 var value = new byte[100];
                 new Random().NextBytes(value);
@@ -134,7 +135,7 @@ namespace Voron.Benchmark
         private static void FillSeqOneTransaction(Stopwatch sw, FlushMode flushMode)
         {
             var memoryMapPager = new FilePager(Path, flushMode);
-			using (var env = new StorageEnvironment(memoryMapPager, file => new MemoryMapPager(file, flushMode), new StorageOptions()))
+			using (var env = new StorageEnvironment(memoryMapPager, file => new MemoryMapPager(DataDir + file, flushMode), new StorageOptions()))
             {
                 var value = new byte[100];
                 new Random().NextBytes(value);
@@ -166,7 +167,7 @@ namespace Voron.Benchmark
         private static void FillRandomMultipleTransaction(Stopwatch sw, FlushMode flushMode)
         {
             var memoryMapPager = new FilePager(Path, flushMode);
-			using (var env = new StorageEnvironment(memoryMapPager, file => new MemoryMapPager(file, flushMode), new StorageOptions()))
+			using (var env = new StorageEnvironment(memoryMapPager, file => new MemoryMapPager(DataDir + file, flushMode), new StorageOptions()))
             {
                 var value = new byte[100];
                 new Random().NextBytes(value);
@@ -201,7 +202,7 @@ namespace Voron.Benchmark
         private static void FillSeqMultipleTransaction(Stopwatch sw, FlushMode flushMode)
         {
             var memoryMapPager = new FilePager(Path, flushMode);
-			using (var env = new StorageEnvironment(memoryMapPager, file => new MemoryMapPager(file, flushMode), new StorageOptions()))
+			using (var env = new StorageEnvironment(memoryMapPager, file => new MemoryMapPager(DataDir + file, flushMode), new StorageOptions()))
             {
                 var value = new byte[100];
                 new Random().NextBytes(value);
@@ -236,7 +237,7 @@ namespace Voron.Benchmark
 
         private static void ReadOneTransaction_Parallel(Stopwatch sw, int concurrency)
         {
-			using (var env = new StorageEnvironment(new FilePager(Path), file => new MemoryMapPager(file), new StorageOptions()))
+			using (var env = new StorageEnvironment(new FilePager(Path), file => new MemoryMapPager(DataDir + file), new StorageOptions()))
             {
                 var countdownEvent = new CountdownEvent(concurrency);
 
@@ -274,7 +275,7 @@ namespace Voron.Benchmark
 
         private static void ReadOneTransaction(Stopwatch sw)
         {
-			using (var env = new StorageEnvironment(new FilePager(Path), file => new MemoryMapPager(file), new StorageOptions()))
+			using (var env = new StorageEnvironment(new FilePager(Path), file => new MemoryMapPager(DataDir + file), new StorageOptions()))
             {
                 sw.Start();
                 using (var tx = env.NewTransaction(TransactionFlags.Read))
@@ -300,7 +301,7 @@ namespace Voron.Benchmark
         private static void ReadAndWriteOneTransaction(Stopwatch sw, int concurrency)
         {
             var memoryMapPager = new FilePager(Path, FlushMode.None);
-			using (var env = new StorageEnvironment(memoryMapPager, file => new MemoryMapPager(file), new StorageOptions()))
+			using (var env = new StorageEnvironment(memoryMapPager, file => new MemoryMapPager(DataDir + file), new StorageOptions()))
             {
                 var value = new byte[100];
                 new Random().NextBytes(value);
