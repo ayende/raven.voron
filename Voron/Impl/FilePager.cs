@@ -14,12 +14,14 @@ namespace Voron.Impl
 		private readonly FlushMode _flushMode;
 		private readonly FileStream _fileStream;
 		private readonly IntPtr _fileHandle;
+		private FileInfo _fileInfo;
 
 		public FilePager(string file, FlushMode flushMode = FlushMode.Full)
 		{
 			_flushMode = flushMode;
-			var fileInfo = new FileInfo(file);
-			var noData = fileInfo.Exists == false || fileInfo.Length == 0;
+			_fileInfo = new FileInfo(file);
+
+			var noData = _fileInfo.Exists == false || _fileInfo.Length == 0;
 
 			var safeHandle = NativeFileMethods.CreateFile(file,
 			                                              NativeFileAccess.GenericRead | NativeFileAccess.GenericWrite,
@@ -44,7 +46,7 @@ namespace Voron.Impl
 			}
 			else
 			{
-                NumberOfAllocatedPages = fileInfo.Length / PageSize;
+                NumberOfAllocatedPages = _fileInfo.Length / PageSize;
 				PagerState.Release();
 				PagerState = CreateNewPagerState();
 			}
@@ -157,6 +159,9 @@ namespace Voron.Impl
 				PagerState = null;
 			}
 			_fileStream.Dispose();
+
+			if(DeleteOnClose)
+				_fileInfo.Delete();
 		}
 	}
 }

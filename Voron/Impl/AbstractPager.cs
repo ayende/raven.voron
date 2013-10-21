@@ -28,6 +28,7 @@ namespace Voron.Impl
 		public int PageMaxSpace { get; private set; }
 		public int MaxNodeSize { get; private set; }
 		public int PageMinSpace { get; private set; }
+		public bool DeleteOnClose { get; set; }
 
 		public int PageSize
 		{

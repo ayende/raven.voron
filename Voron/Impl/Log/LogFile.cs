@@ -315,5 +315,10 @@ namespace Voron.Impl.Log
 			}
 			
 		}
+
+		public void DeleteOnClose()
+		{
+			_pager.DeleteOnClose = true;
+		}
 	}
 }

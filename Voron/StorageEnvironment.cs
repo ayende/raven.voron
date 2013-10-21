@@ -48,7 +48,8 @@ namespace Voron
 				_sliceComparer = NativeMethods.memcmp;
 				FreeSpaceHandling = new BinaryFreeSpaceStrategy(n => new IntPtr(_dataPager.AcquirePagePointer(n)));
 
-				_log = new WriteAheadLog(this, createLogFilePager, _dataPager, options.LogFileSize, disposeLogFiles: options.OwnsPagers);
+				_log = new WriteAheadLog(this, createLogFilePager, _dataPager, options.LogFileSize, options.DeleteUnusedLogFiles,
+				                         options.OwnsPagers);
 				
 				Setup();
 

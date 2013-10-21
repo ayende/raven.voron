@@ -7,6 +7,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
 using Voron.Impl.FileHeaders;
@@ -20,6 +21,7 @@ namespace Voron.Impl.Log
 		private readonly StorageEnvironment _env;
 		private readonly Func<string, IVirtualPager> _createLogFilePager;
 		private readonly IVirtualPager _dataPager;
+		private readonly bool _deleteUnusedLogFiles;
 		private readonly List<LogFile> _logFiles = new List<LogFile>();
 		internal HashSet<LogFile> _scheduledToFlush = new HashSet<LogFile>();
 		private readonly Func<long, string> _logName = number => string.Format("{0:D19}.txlog", number);
@@ -32,11 +34,13 @@ namespace Voron.Impl.Log
 		private long _dataFlushCounter = 0;
 		private bool _disabled;
 
-		public WriteAheadLog(StorageEnvironment env, Func<string, IVirtualPager> createLogFilePager, IVirtualPager dataPager, long logFileSize, bool disposeLogFiles = true)
+		public WriteAheadLog(StorageEnvironment env, Func<string, IVirtualPager> createLogFilePager, IVirtualPager dataPager,
+		                     long logFileSize, bool deleteUnusedLogFiles, bool disposeLogFiles)
 		{
 			_env = env;
 			_createLogFilePager = createLogFilePager;
 			_dataPager = dataPager;
+			_deleteUnusedLogFiles = deleteUnusedLogFiles;
 			_disposeLogFiles = disposeLogFiles;
 			LogFileSize = logFileSize;
 			_fileHeader = GetEmptyFileHeader();
@@ -86,7 +90,14 @@ namespace Voron.Impl.Log
 
 			for (var logNumber = logInfo.RecentLog - logInfo.LogFilesCount + 1; logNumber <= logInfo.RecentLog; logNumber++)
 			{
-				_logFiles.Add(new LogFile(_createLogFilePager(_logName(logNumber)), logNumber));
+				var pager = _createLogFilePager(_logName(logNumber));
+
+				if (pager.NumberOfAllocatedPages != (LogFileSize/pager.PageSize))
+					throw new InvalidDataException("Log file " + _logName(logNumber) + " should contain " +
+					                               (LogFileSize/pager.PageSize) + " pages, while it has " +
+					                               pager.NumberOfAllocatedPages + " pages allocated.");
+
+				_logFiles.Add(new LogFile(pager, logNumber));
 			}
 
 			foreach (var logItem in _logFiles)
@@ -259,6 +270,11 @@ namespace Voron.Impl.Log
 
 			foreach (var logFile in _scheduledToFlush)
 			{
+				if (_deleteUnusedLogFiles)
+				{
+					logFile.DeleteOnClose();
+				}
+
 				_logFiles.Remove(logFile);
 				logFile.Dispose();
 			}

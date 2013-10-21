@@ -10,6 +10,7 @@ namespace Voron.Impl
 	{
 		private readonly FlushMode _flushMode;
 		private readonly FileStream _fileStream;
+		private FileInfo _fileInfo;
 
 		[DllImport("kernel32.dll", SetLastError = true)]
 		[return: MarshalAs(UnmanagedType.Bool)]
@@ -18,16 +19,16 @@ namespace Voron.Impl
 		public MemoryMapPager(string file, FlushMode flushMode = FlushMode.Full)
 		{
 			_flushMode = flushMode;
-			var fileInfo = new FileInfo(file);
-			var hasData = fileInfo.Exists == false || fileInfo.Length == 0;
-			_fileStream = fileInfo.Open(FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.Read);
-			if (hasData)
+			_fileInfo = new FileInfo(file);
+			var noData = _fileInfo.Exists == false || _fileInfo.Length == 0;
+			_fileStream = _fileInfo.Open(FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.Read);
+			if (noData)
 			{
 				NumberOfAllocatedPages = 0;
 			}
 			else
 			{
-				NumberOfAllocatedPages = fileInfo.Length / PageSize;
+				NumberOfAllocatedPages = _fileInfo.Length / PageSize;
 				PagerState.Release();
 				PagerState = CreateNewPagerState();
 			}
@@ -117,6 +118,9 @@ namespace Voron.Impl
 				PagerState = null;
 			}
 			_fileStream.Dispose();
+
+			if(DeleteOnClose)
+				_fileInfo.Delete();
 		}
 	}
 }

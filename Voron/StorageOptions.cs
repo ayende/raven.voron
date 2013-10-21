@@ -11,10 +11,13 @@ namespace Voron
 
 		public bool OwnsPagers { get; set; }
 
+		public bool DeleteUnusedLogFiles { get; set; }
+
 		public StorageOptions()
 		{
 			LogFileSize = 64*1024*1024;
 			OwnsPagers = true;
+			DeleteUnusedLogFiles = true;
 		}
 	}
 }

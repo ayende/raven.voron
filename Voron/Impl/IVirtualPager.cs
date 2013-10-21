@@ -19,8 +19,9 @@ namespace Voron.Impl
 		int MaxNodeSize { get; }
 		int PageMaxSpace { get; }
 		int PageMinSpace { get; }
+	    bool DeleteOnClose { get; set; }
 
-		void Sync();
+	    void Sync();
 
 		PagerState TransactionBegan();
 
