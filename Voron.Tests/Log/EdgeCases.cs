@@ -1,5 +1,5 @@
 ﻿// -----------------------------------------------------------------------
-//  <copyright file="EdgeConditions.cs" company="Hibernating Rhinos LTD">
+//  <copyright file="EdgeCases.cs" company="Hibernating Rhinos LTD">
 //      Copyright (c) Hibernating Rhinos LTD. All rights reserved.
 //  </copyright>
 // -----------------------------------------------------------------------
@@ -11,7 +11,7 @@ using Xunit;
 
 namespace Voron.Tests.Log
 {
-	public class EdgeConditions : StorageTest
+	public class EdgeCases : StorageTest
 	{
 		// all tests here relay on the fact than one log file can contains max 10 pages
 		protected override void Configure(StorageOptions options, IVirtualPager pager)
@@ -33,7 +33,5 @@ namespace Voron.Tests.Log
 			Assert.Equal(1, Env.Log._scheduledToFlush.Count);
 			Assert.Equal(0, Env.Log._scheduledToFlush.First().Number);
 		}
-
-
 	}
 }

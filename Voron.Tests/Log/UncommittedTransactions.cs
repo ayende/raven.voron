@@ -4,6 +4,7 @@
 //  </copyright>
 // -----------------------------------------------------------------------
 
+using System;
 using System.IO;
 using Voron.Impl;
 using Xunit;
@@ -64,6 +65,38 @@ namespace Voron.Tests.Log
 				var readPage = Env.Log.ReadPage(tx2, pageAllocatedInUncommittedTransaction);
 
 				Assert.Null(readPage);
+			}
+		}
+
+		[Fact]
+		public void LogShouldCopeWithUncommittedSplitTransaction()
+		{
+			var bytes = new byte[1024];
+			new Random().NextBytes(bytes);
+
+			// everything is done in one transaction but it takes 2 log files - transaction split
+			using (var tx = Env.NewTransaction(TransactionFlags.ReadWrite))
+			{
+				Assert.True(Env.Log.FilesInUse == 1);
+
+				for (int i = 0; i < 15; i++)
+				{
+					Env.Root.Add(tx, "item/" + i, new MemoryStream(bytes));
+				}
+
+				Assert.True(Env.Log.FilesInUse == 2); // verify that it really takes 2 pages
+
+				// tx.Commit(); do not commit
+			}
+
+			using (var tx = Env.NewTransaction(TransactionFlags.ReadWrite))
+			{
+				// should go to first log because the last split transaction was uncommitted so we can reuse the pages allocated by it
+				Assert.Equal(0, Env.Log._currentFile.Number);
+
+				Env.Root.Add(tx, "item/a", new MemoryStream(bytes));
+				
+				tx.Commit();
 			}
 		}
 	}

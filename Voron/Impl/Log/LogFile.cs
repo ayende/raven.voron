@@ -58,12 +58,25 @@ namespace Voron.Impl.Log
 			get { return _pageTranslationTable.Keys; }
 		}
 
+		public bool LastTransactionCommitted
+		{
+			get
+			{
+				if (_currentTxHeader != null)
+				{
+					Debug.Assert(_currentTxHeader->TxMarker.HasFlag(TransactionMarker.Commit) == false);
+					return false;
+				}
+
+				return true;
+			}
+		}
+
 		public void TransactionBegin(Transaction tx)
 		{
-			if (_currentTxHeader != null)
+			if (LastTransactionCommitted == false)
 			{
 				// last transaction did not commit, we need to move back the write page position
-				Debug.Assert(_currentTxHeader->TxMarker.HasFlag(TransactionMarker.Commit) == false);
 				_writePage = _lastSyncedPage + 1;
 			}
 

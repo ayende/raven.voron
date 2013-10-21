@@ -6,6 +6,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Runtime.InteropServices;
 using Voron.Impl.FileHeaders;
@@ -154,6 +155,13 @@ namespace Voron.Impl.Log
 
 			if(_currentFile == null)
 				 _currentFile = NextFile(tx);
+
+			if (_splitLogFile != null) // last split transaction was not committed
+			{
+				Debug.Assert(_splitLogFile.LastTransactionCommitted == false);
+				_currentFile = _splitLogFile;
+				_splitLogFile = null;
+			}
 
 			_currentFile.TransactionBegin(tx);
 		}

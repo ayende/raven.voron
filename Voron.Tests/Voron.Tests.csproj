@@ -61,7 +61,7 @@
     <Compile Include="Bugs\UpdateLastItem.cs" />
     <Compile Include="Impl\Free\FreeSpaceTests.cs" />
     <Compile Include="Log\BasicActions.cs" />
-    <Compile Include="Log\EdgeConditions.cs" />
+    <Compile Include="Log\EdgeCases.cs" />
     <Compile Include="Log\UncommittedTransactions.cs" />
     <Compile Include="MultiValueTree.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
