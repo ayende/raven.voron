@@ -356,36 +356,43 @@ namespace Voron
             Transaction txr = null;
             try
             {
-                var buffer = new byte[_dataPager.PageSize*16];
-                long nextPageNumber;
-                using (var txw = NewTransaction(TransactionFlags.ReadWrite)) // so we can snapshot the headers safely
-                {
-                    txr = NewTransaction(TransactionFlags.Read); // now have snapshot view
-                    nextPageNumber = txw.NextPageNumber;
-                    var firstPage = _dataPager.Read(0);
-                    using (var headerStream = new UnmanagedMemoryStream(firstPage.Base, _dataPager.PageSize*2))
-                    {
-                        while (headerStream.Position < headerStream.Length)
-                        {
-                            var read = headerStream.Read(buffer, 0, buffer.Length);
-                            output.Write(buffer, 0, read);
-                        }
-                    }
-                    //txw.Commit(); intentionally not committing
-                }
-                // now can copy everything else
-                var firtDataPage = _dataPager.Read(2);
-                using (
-                    var headerStream = new UnmanagedMemoryStream(firtDataPage.Base, _dataPager.PageSize*(nextPageNumber - 2))
-                    )
-                {
-                    while (headerStream.Position < headerStream.Length)
-                    {
-                        var read = headerStream.Read(buffer, 0, buffer.Length);
-                        output.Write(buffer, 0, read);
-                    }
-                }
-                //txr.Commit(); intentionally not committing
+				_log.ScheduleAllLogsFlush();
+				FlushLogToDataFile();
+
+	            using (_log.DisableLog()) // to make sure that write transaction will not modify log info in a file header
+	            {
+		            var buffer = new byte[_dataPager.PageSize*16];
+		            long nextPageNumber;
+		            using (var txw = NewTransaction(TransactionFlags.ReadWrite)) // so we can snapshot the headers safely
+		            {
+			            txr = NewTransaction(TransactionFlags.Read); // now have snapshot view
+			            nextPageNumber = txw.NextPageNumber;
+			            var firstPage = _dataPager.Read(0);
+			            using (var headerStream = new UnmanagedMemoryStream(firstPage.Base, _dataPager.PageSize*2))
+			            {
+				            while (headerStream.Position < headerStream.Length)
+				            {
+					            var read = headerStream.Read(buffer, 0, buffer.Length);
+					            output.Write(buffer, 0, read);
+				            }
+			            }
+			            //txw.Commit(); intentionally not committing
+		            }
+
+		            // now can copy everything else
+		            var firtDataPage = _dataPager.Read(2);
+		            using (
+			            var headerStream = new UnmanagedMemoryStream(firtDataPage.Base, _dataPager.PageSize*(nextPageNumber - 2))
+			            )
+		            {
+			            while (headerStream.Position < headerStream.Length)
+			            {
+				            var read = headerStream.Read(buffer, 0, buffer.Length);
+				            output.Write(buffer, 0, read);
+			            }
+		            }
+		            //txr.Commit(); intentionally not committing
+	            }
             }
             finally
             {

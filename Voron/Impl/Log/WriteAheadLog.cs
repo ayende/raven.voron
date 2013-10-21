@@ -10,6 +10,7 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using Voron.Impl.FileHeaders;
 using Voron.Trees;
+using Voron.Util;
 
 namespace Voron.Impl.Log
 {
@@ -19,7 +20,7 @@ namespace Voron.Impl.Log
 		private readonly Func<string, IVirtualPager> _createLogFilePager;
 		private readonly IVirtualPager _dataPager;
 		private readonly List<LogFile> _logFiles = new List<LogFile>();
-		internal List<LogFile> _scheduledToFlush = new List<LogFile>();
+		internal HashSet<LogFile> _scheduledToFlush = new HashSet<LogFile>();
 		private readonly Func<long, string> _logName = number => string.Format("{0:D19}.txlog", number);
 		private readonly bool _disposeLogFiles;
 		internal LogFile _currentFile;
@@ -28,6 +29,7 @@ namespace Voron.Impl.Log
 		private FileHeader* _fileHeader;
 		private IntPtr _inMemoryHeader;
 		private long _dataFlushCounter = 0;
+		private bool _disabled;
 
 		public WriteAheadLog(StorageEnvironment env, Func<string, IVirtualPager> createLogFilePager, IVirtualPager dataPager, long logFileSize, bool disposeLogFiles = true)
 		{
@@ -147,6 +149,9 @@ namespace Voron.Impl.Log
 
 		public void TransactionBegin(Transaction tx)
 		{
+			if(_disabled)
+				return;
+
 			if(_currentFile == null)
 				 _currentFile = NextFile(tx);
 
@@ -155,6 +160,9 @@ namespace Voron.Impl.Log
 
 		public void TransactionCommit(Transaction tx)
 		{
+			if(_disabled)
+				return;
+
 			if (_splitLogFile != null)
 			{
 				_splitLogFile.TransactionCommit(tx);
@@ -214,14 +222,15 @@ namespace Voron.Impl.Log
 
 			var pagesToWrite = new Dictionary<long, Page>();
 
-			// read from the end in order to write only the most recent version of page
-			for (int i = _scheduledToFlush.Count - 1; i >= 0; i--)
+			// read from the end in order to write only the most recent version of a page
+			var logsInReversedOrder = _scheduledToFlush.OrderByDescending(x => x.Number);
+			foreach (var log in logsInReversedOrder)
 			{
-				foreach (var pageNumber in _logFiles[i].ModifiedPageNumbers)
+				foreach (var pageNumber in log.ModifiedPageNumbers)
 				{
 					if (pagesToWrite.ContainsKey(pageNumber) == false)
 					{
-						pagesToWrite[pageNumber] = _scheduledToFlush[i].ReadPage(tx, pageNumber);
+						pagesToWrite[pageNumber] = log.ReadPage(tx, pageNumber);
 					}
 				}
 			}
@@ -238,7 +247,7 @@ namespace Voron.Impl.Log
 
 			_dataPager.Sync();
 
-			UpdateFileHeaderAfterDataFileSync(_scheduledToFlush.Last());
+			UpdateFileHeaderAfterDataFileSync(logsInReversedOrder.First());
 
 			foreach (var logFile in _scheduledToFlush)
 			{
@@ -248,7 +257,12 @@ namespace Voron.Impl.Log
 
 			UpdateLogInfo();
 
+			if (_logFiles.Count == 0)
+				_currentFile = null;
+
 			WriteFileHeader(tx);
+
+			_scheduledToFlush.Clear();
 
 			_dataFlushCounter++;
 		}
@@ -277,6 +291,14 @@ namespace Voron.Impl.Log
 			_logFiles.Clear();
 		}
 
+		internal void ScheduleAllLogsFlush()
+		{
+			foreach (var logFile in _logFiles)
+			{
+				ScheduleFlush(logFile);
+			}
+		}
+
 		private FileHeader* GetEmptyFileHeader()
 		{
 			if(_inMemoryHeader == IntPtr.Zero)
@@ -302,6 +324,12 @@ namespace Voron.Impl.Log
 			header->LogInfo.LastSyncedPage = -1;
 
 			return header;
+		}
+
+		public IDisposable DisableLog()
+		{
+			_disabled = true;
+			return new DisposableAction(() => _disabled = false);
 		}
 	}
 }

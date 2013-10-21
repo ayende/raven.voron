@@ -135,7 +135,7 @@ namespace Voron.Impl
 				OffsetHigh = (int)(position >> 32)
 			};
 
-			var toWrite = page.IsOverflow ? page.OverflowSize : PageSize;
+			var toWrite = page.IsOverflow ? (page.OverflowSize + Constants.PageHeaderSize) : PageSize;
 
 			if (NativeFileMethods.WriteFile(_fileHandle, new IntPtr(page.Base), (uint) toWrite, out written, ref nativeOverlapped) == false)
 			{

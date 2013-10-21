@@ -89,7 +89,7 @@ namespace Voron.Impl
 		{
 			var position = page.PageNumber * PageSize;
 
-			var toWrite = page.IsOverflow ? page.OverflowSize : PageSize;
+			var toWrite = page.IsOverflow ? (page.OverflowSize + Constants.PageHeaderSize) : PageSize;
 
 			NativeMethods.memcpy(PagerState.Base + position, page.Base, toWrite);
 

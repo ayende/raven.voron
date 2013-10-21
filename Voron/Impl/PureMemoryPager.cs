@@ -45,7 +45,7 @@ namespace Voron.Impl
 
 	    protected override int Write(Page page)
 	    {
-			var toWrite = page.IsOverflow ? page.OverflowSize : PageSize;
+			var toWrite = page.IsOverflow ? (page.OverflowSize + Constants.PageHeaderSize): PageSize;
 
 			NativeMethods.memcpy(AcquirePagePointer(page.PageNumber), page.Base, toWrite);
 

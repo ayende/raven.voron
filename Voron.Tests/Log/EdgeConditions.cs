@@ -5,6 +5,7 @@
 // -----------------------------------------------------------------------
 
 using System.IO;
+using System.Linq;
 using Voron.Impl;
 using Xunit;
 
@@ -30,7 +31,7 @@ namespace Voron.Tests.Log
 
 			Assert.Null(Env.Log._currentFile);
 			Assert.Equal(1, Env.Log._scheduledToFlush.Count);
-			Assert.Equal(0, Env.Log._scheduledToFlush[0].Number);
+			Assert.Equal(0, Env.Log._scheduledToFlush.First().Number);
 		}
 
 

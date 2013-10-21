@@ -54,6 +54,7 @@
     <Compile Include="Impl\FileHeaders\TreeFlags.cs" />
     <Compile Include="Impl\FileHeaders\TreeRootHeader.cs" />
     <Compile Include="Impl\FlushMode.cs" />
+    <Compile Include="Util\DisposableAction.cs" />
     <Compile Include="Impl\Log\LogInfo.cs" />
     <Compile Include="Impl\Log\TransactionMarker.cs" />
     <Compile Include="Impl\Log\WriteAheadLog.cs" />
