@@ -56,43 +56,59 @@ namespace Voron.Tests.Storage
 			}
 		}
 
-		//[Fact]
-		//public void DataIsKeptAfterRestartForSubTrees()
-		//{
-		//	using (var pureMemoryPager = new PureMemoryPager())
-		//	{
-		//		using (var env = new StorageEnvironment(pureMemoryPager, ownsPager: false))
-		//		{
-		//			using (var tx = env.NewTransaction(TransactionFlags.ReadWrite))
-		//			{
-		//				env.CreateTree(tx, "test");
-		//				tx.Commit();
-		//			}
-		//			using (var tx = env.NewTransaction(TransactionFlags.ReadWrite))
-		//			{
-		//				env.GetTree(tx,"test").Add(tx, "test", Stream.Null);
-		//				tx.Commit();
-		//			}
-		//		}
+		[Fact]
+		public void DataIsKeptAfterRestartForSubTrees()
+		{
+			using (var pureMemoryPager = new PureMemoryPager())
+			{
+				var logPagers = new Dictionary<string, PureMemoryPager>();
 
-		//		using (var env = new StorageEnvironment(pureMemoryPager))
-		//		{
-		//			using (var tx = env.NewTransaction(TransactionFlags.ReadWrite))
-		//			{
-		//				env.CreateTree(tx, "test");
-		//				tx.Commit();
-		//			}
+				using (var env = new StorageEnvironment(pureMemoryPager, logName =>
+				{
+					var pager = new PureMemoryPager();
+					logPagers[logName] = pager;
+					return pager;
+				},
+														new StorageOptions()
+														{
+															OwnsPagers = false
+														}))
+				{
+					using (var tx = env.NewTransaction(TransactionFlags.ReadWrite))
+					{
+						env.CreateTree(tx, "test");
+						tx.Commit();
+					}
+					using (var tx = env.NewTransaction(TransactionFlags.ReadWrite))
+					{
+						env.GetTree(tx,"test").Add(tx, "test", Stream.Null);
+						tx.Commit();
+					}
+				}
 
-		//			using (var tx = env.NewTransaction(TransactionFlags.Read))
-		//			{
-		//				Assert.NotNull(env.GetTree(tx,"test").Read(tx, "test"));
-		//				tx.Commit();
-		//			}
-		//		}
-		//	}
-		//}
+				using (var env = new StorageEnvironment(pureMemoryPager, logName =>
+				{
+					if (logPagers.ContainsKey(logName))
+						return logPagers[logName];
+					return new PureMemoryPager();
+				}, new StorageOptions()))
+				{
+					using (var tx = env.NewTransaction(TransactionFlags.ReadWrite))
+					{
+						env.CreateTree(tx, "test");
+						tx.Commit();
+					}
 
-		//[Fact]
+					using (var tx = env.NewTransaction(TransactionFlags.Read))
+					{
+						Assert.NotNull(env.GetTree(tx,"test").Read(tx, "test"));
+						tx.Commit();
+					}
+				}
+			}
+		}
+
+		//[Fact] TODO arek
 		//public void FreeSpaceBuffersAreRecoveredAfterRestartIfNecessary()
 		//{
 		//	using (var pureMemoryPager = new PureMemoryPager())

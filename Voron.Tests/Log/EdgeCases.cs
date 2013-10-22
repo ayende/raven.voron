@@ -20,7 +20,7 @@ namespace Voron.Tests.Log
 		}
 
 		[Fact]
-		public void TransactionCommitShouldScheduleFlushToDataFileForFullLogAndSetItNull()
+		public void TransactionCommitShouldSetCurrentLogFileToNullIfItIsFull()
 		{
 			using (var tx = Env.NewTransaction(TransactionFlags.ReadWrite))
 			{
@@ -30,8 +30,7 @@ namespace Voron.Tests.Log
 			}
 
 			Assert.Null(Env.Log._currentFile);
-			Assert.Equal(1, Env.Log._scheduledToFlush.Count);
-			Assert.Equal(0, Env.Log._scheduledToFlush.First().Number);
+			Assert.Equal(1, Env.Log.FilesInUse);
 		}
 	}
 }

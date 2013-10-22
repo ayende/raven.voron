@@ -36,7 +36,7 @@ namespace Voron.Tests.Log
 			// should reuse pages allocated by uncommitted tx0
 			using (var tx1 = Env.NewTransaction(TransactionFlags.ReadWrite))
 			{
-				var bytes = new byte[4 * Env.PageSize]; // here we allocate less pages
+				var bytes = new byte[3 * Env.PageSize]; // here we allocate less pages
 				Env.Root.Add(tx1, "items/1", new MemoryStream(bytes));
 				tx1.Commit();
 			}

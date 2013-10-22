@@ -24,6 +24,6 @@ namespace Voron.Impl.Log
 		public long LastSyncedLog;
 
 		[FieldOffset(32)]
-		public long LastSyncedPage;
+		public long LastSyncedLogPage;
 	}
 }

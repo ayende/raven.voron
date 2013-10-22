@@ -30,7 +30,7 @@ namespace Voron.Impl
 		int GetNumberOfOverflowPages(Transaction tx, int overflowSize);
 
         void EnsureContinuous(Transaction tx, long requestedPageNumber, int pageCount);
-        int Write(Transaction tx, Page page);
+        int Write(Page page);
 	    Page GetWritable(long pageNumber);
 	}
 }

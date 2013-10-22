@@ -75,8 +75,8 @@ namespace Voron
 				_dataPager.EnsureContinuous(null, 0, 2); // for file headers
 
 				// write empty file headers
-				_log.WriteFileHeader(null, 0);
-				_log.WriteFileHeader(null, 1);
+				_log.WriteFileHeader(0);
+				_log.WriteFileHeader(1);
 
 				//var freeSpaceHeader = new FreeSpaceHeader
 				//	{
@@ -357,7 +357,6 @@ namespace Voron
             Transaction txr = null;
             try
             {
-				_log.ScheduleAllLogsFlush();
 				FlushLogToDataFile();
 
 	            using (_log.DisableLog()) // to make sure that write transaction will not modify log info in a file header
@@ -404,15 +403,7 @@ namespace Voron
 
 		internal void FlushLogToDataFile(object state = null)
 		{
-			if(_activeTransactions.Count(x => x.Value.Flags == TransactionFlags.ReadWrite) > 0)
-				return;
-
-			using (var tx = NewTransaction(TransactionFlags.ReadWrite))
-			{
-				_log.ApplyLogsToDataFile(tx);
-
-				// tx.Commit(); intentionally not committing
-			}
+				_log.ApplyLogsToDataFile();
 		}
 
         public Dictionary<string, List<long>> AllPages(Transaction tx)

@@ -8,22 +8,26 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
+using System.Threading;
 using Voron.Trees;
 using Voron.Util;
 
 namespace Voron.Impl.Log
 {
-	public class TransactionInLog
+	public class CommitSnapshot
 	{
-		public long Id;
-		public long LastPageNumber;
+		public long LogNumber;
+		public long TxId;
+		public long TxLastPageNumber;
+		public long LastWrittenLogPage;
 	}
 
 	public unsafe class LogFile : IDisposable
 	{
 		private const int pagesTakenByHeader = 1;
 
-		private readonly IVirtualPager _pager;
+		private IVirtualPager _pager;
 		private readonly Dictionary<long, long> _pageTranslationTable = new Dictionary<long, long>();
 		private readonly Dictionary<long, long> _transactionPageTranslationTable = new Dictionary<long, long>();
 		private long _writePage = 0;
@@ -31,14 +35,13 @@ namespace Voron.Impl.Log
 		private int _allocatedPagesInTransaction = 0;
 		private int _overflowPagesInTransaction = 0;
 		private TransactionHeader* _currentTxHeader = null;
+		private CommitSnapshot _commitSnapshot;
 
 		public LogFile(IVirtualPager pager, long logNumber)
 		{
 			Number = logNumber;
 			_pager = pager;
 			_writePage = 0;
-
-			LastCommittedTransaction = new TransactionInLog();
 		}
 
 		public LogFile(IVirtualPager pager, long logNumber, long lastSyncedPage)
@@ -61,12 +64,13 @@ namespace Voron.Impl.Log
 			get { return _writePage; }
 		}
 
-		public IEnumerable<long> ModifiedPageNumbers
+		public IEnumerable<long> GetModifiedPages(long? lastLogPageSyncedWithDataFile)
 		{
-			get { return _pageTranslationTable.Keys; }
-		}
+			if(lastLogPageSyncedWithDataFile == null)
+				return _pageTranslationTable.Keys;
 
-		public TransactionInLog LastCommittedTransaction { get; set; }
+			return _pageTranslationTable.Where(x => x.Value > lastLogPageSyncedWithDataFile).Select(x => x.Key);
+		}
 
 		public bool LastTransactionCommitted
 		{
@@ -129,8 +133,13 @@ namespace Voron.Impl.Log
 				_pageTranslationTable[translation.Key] = translation.Value;
 			}
 
-			LastCommittedTransaction.Id = tx.Id;
-			LastCommittedTransaction.LastPageNumber = tx.NextPageNumber - 1;
+			_commitSnapshot = new CommitSnapshot()
+				{
+					LogNumber = Number,
+					TxId = tx.Id,
+					TxLastPageNumber = tx.NextPageNumber - 1,
+					LastWrittenLogPage = _writePage - 1
+				};
 
 			_currentTxHeader->LastPageNumber = tx.NextPageNumber - 1;
 			_currentTxHeader->TxMarker |= TransactionMarker.Commit;
@@ -180,7 +189,7 @@ namespace Voron.Impl.Log
 		{
 			if (_pageTranslationTable.ContainsKey(pageNumber) == false)
 			{
-				if (_currentTxHeader != null && _currentTxHeader->TxId == tx.Id && _transactionPageTranslationTable.ContainsKey(pageNumber))
+				if (tx != null && _currentTxHeader != null && _currentTxHeader->TxId == tx.Id && _transactionPageTranslationTable.ContainsKey(pageNumber))
 					return _pager.Read(_transactionPageTranslationTable[pageNumber]);
 				return null;
 			}
@@ -211,11 +220,6 @@ namespace Voron.Impl.Log
 			_writePage += numberOfPages;
 
 			return result;
-		}
-
-		public void Dispose()
-		{
-			_pager.Dispose();
 		}
 
 		public TransactionHeader* RecoverAndValidate(long startReadingPage, TransactionHeader* previous)
@@ -320,5 +324,41 @@ namespace Voron.Impl.Log
 		{
 			_pager.DeleteOnClose = true;
 		}
+
+		private int _refs;
+
+		public void Release()
+		{
+			if (Interlocked.Decrement(ref _refs) != 0)
+				return;
+
+			Dispose();
+		}
+
+		public void AddRef()
+		{
+			Interlocked.Increment(ref _refs);
+		}
+
+		public void Dispose()
+		{
+			OnDispose(this);
+
+			_pager.Dispose();
+			_pager = null;
+		}
+
+		public CommitSnapshot TakeSnapshot()
+		{
+			return new CommitSnapshot()
+				{
+					LogNumber = Number,
+					TxId = _commitSnapshot.TxId,
+					TxLastPageNumber = _commitSnapshot.TxLastPageNumber,
+					LastWrittenLogPage = _commitSnapshot.LastWrittenLogPage
+				};
+		}
+
+		public Action<LogFile> OnDispose = x => { };
 	}
 }

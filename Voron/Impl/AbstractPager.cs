@@ -110,14 +110,7 @@ namespace Voron.Impl
 			return (tx.Environment.PageSize - 1 + overflowSize) / (tx.Environment.PageSize) + 1;
 		}
 
-	    protected abstract int Write(Page page);
-
-        public int Write(Transaction tx, Page page)
-        {
-	        EnsureContinuous(tx, page.PageNumber, page.IsOverflow ? Page.GetNumberOfOverflowPages(PageSize, page.OverflowSize) : 1);
-
-	        return Write(page);
-        }
+	    public abstract int Write(Page page);
 
         public void EnsureFreeSpaceTrackingHasEnoughSpace(Transaction tx, int pageCount)
 		{

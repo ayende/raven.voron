@@ -125,7 +125,7 @@ namespace Voron.Impl
 				_fileStream.Flush(true);
 		}
 
-		protected override int Write(Page page)
+		public override int Write(Page page)
 		{
 			uint written;
 

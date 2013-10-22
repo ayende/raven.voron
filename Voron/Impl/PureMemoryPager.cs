@@ -43,7 +43,7 @@ namespace Voron.Impl
 			PagerState.AddRef();
 		}
 
-	    protected override int Write(Page page)
+	    public override int Write(Page page)
 	    {
 			var toWrite = page.IsOverflow ? (page.OverflowSize + Constants.PageHeaderSize): PageSize;
 

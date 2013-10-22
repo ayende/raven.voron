@@ -80,9 +80,8 @@ namespace Voron.Impl
 					PageMinSpace = _dataPager.PageMinSpace,
 					PageSize = _dataPager.PageSize
 				};
-
-			if(flags == TransactionFlags.ReadWrite)
-				_log.TransactionBegin(this);
+			
+			_log.TransactionBegin(this);
 
 			foreach (var tree in env.Trees)
 			{
@@ -296,6 +295,8 @@ namespace Voron.Impl
 			{
 				pagerState.Release();
 			}
+
+			_log.Release();
 		}
 
 		public TreeDataInTransaction GetTreeInformation(Tree tree)
