@@ -83,6 +83,8 @@ namespace Voron.Impl
 			
 			_log.TransactionBegin(this);
 
+			_log.AddRef();
+
 			foreach (var tree in env.Trees)
 			{
 				GetTreeInformation(tree);

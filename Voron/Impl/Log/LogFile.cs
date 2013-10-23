@@ -36,6 +36,8 @@ namespace Voron.Impl.Log
 		private int _overflowPagesInTransaction = 0;
 		private TransactionHeader* _currentTxHeader = null;
 		private CommitSnapshot _commitSnapshot;
+		public Action<LogFile> OnDispose = x => { };
+		private bool _diposed;
 
 		public LogFile(IVirtualPager pager, long logNumber)
 		{
@@ -51,6 +53,17 @@ namespace Voron.Impl.Log
 			_writePage = lastSyncedPage + 1;
 		}
 
+		~LogFile()
+		{
+			if (_diposed == false)
+			{
+				Dispose();
+
+				Trace.WriteLine(
+					"Disposing a log file from finalizer! It should be diposed by using LogFile.Release() instead!. Log file number: " +
+					Number + ". Number of references: " + _refs);
+			}
+		}
 
 		public long Number { get; private set; }
 
@@ -342,10 +355,14 @@ namespace Voron.Impl.Log
 
 		public void Dispose()
 		{
+			if(_diposed)
+				throw new ObjectDisposedException("Log file is already disposed");
+
 			OnDispose(this);
 
 			_pager.Dispose();
-			_pager = null;
+
+			_diposed = true;
 		}
 
 		public CommitSnapshot TakeSnapshot()
@@ -358,7 +375,5 @@ namespace Voron.Impl.Log
 					LastWrittenLogPage = _commitSnapshot.LastWrittenLogPage
 				};
 		}
-
-		public Action<LogFile> OnDispose = x => { };
 	}
 }

@@ -165,22 +165,20 @@ namespace Voron.Impl.Log
 			if(_disabled)
 				return;
 
-			if (tx.Flags == TransactionFlags.ReadWrite)
+			if (tx.Flags != TransactionFlags.ReadWrite)
+				return;
+			
+			if (_currentFile == null)
+				_currentFile = NextFile(tx);
+
+			if (_splitLogFile != null) // last split transaction was not committed
 			{
-				if (_currentFile == null)
-					_currentFile = NextFile(tx);
-
-				if (_splitLogFile != null) // last split transaction was not committed
-				{
-					Debug.Assert(_splitLogFile.LastTransactionCommitted == false);
-					_currentFile = _splitLogFile;
-					_splitLogFile = null;
-				}
-
-				_currentFile.TransactionBegin(tx);
+				Debug.Assert(_splitLogFile.LastTransactionCommitted == false);
+				_currentFile = _splitLogFile;
+				_splitLogFile = null;
 			}
 
-			AddRef();
+			_currentFile.TransactionBegin(tx);
 		}
 
 		public void TransactionCommit(Transaction tx)
@@ -299,10 +297,14 @@ namespace Voron.Impl.Log
 						if (_logFiles.Contains(x))
 							_logFiles.Remove(x);
 					};
-				fullLog.Release(); // TODO what if log was already released by WAL
 			}
 
 			UpdateLogInfo();
+
+			foreach (var fullLog in fullLogs)
+			{
+				fullLog.Release(); // TODO what if log was already released by WAL
+			}
 
 			if (_logFiles.Count == 0)
 				_currentFile = null;
