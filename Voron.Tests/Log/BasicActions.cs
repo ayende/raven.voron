@@ -34,7 +34,7 @@ namespace Voron.Tests.Log
 				}
 			}
 
-			Assert.True(Env.Log.FilesInUse > 1);
+			Assert.True(Env.Log.Files.Count > 1);
 
 			for (var i = 0; i < 15; i++)
 			{
@@ -63,7 +63,7 @@ namespace Voron.Tests.Log
 			}
 
 			// however we put that into 2 log files
-			Assert.True(Env.Log.FilesInUse == 2);
+			Assert.True(Env.Log.Files.Count == 2);
 
 			// and still can read from both files
 			for (var i = 0; i < 15; i++)
@@ -98,7 +98,7 @@ namespace Voron.Tests.Log
 				Env.Root.Add(tx1, "items/1", StreamFor("values/1"));
 				// tx1.Commit(); aborted transaction
 			}
-			var writePosition = Env.Log._currentFile.WritePagePosition;
+			var writePosition = Env.Log.CurrentFile.WritePagePosition;
 
 			// should reuse pages allocated by tx1
 			using (var tx2 = Env.NewTransaction(TransactionFlags.ReadWrite))
@@ -107,8 +107,8 @@ namespace Voron.Tests.Log
 				tx2.Commit();
 			}
 
-			Assert.Equal(0, Env.Log._currentFile.Number); // still the same log
-			Assert.Equal(writePosition, Env.Log._currentFile.WritePagePosition);
+			Assert.Equal(0, Env.Log.CurrentFile.Number); // still the same log
+			Assert.Equal(writePosition, Env.Log.CurrentFile.WritePagePosition);
 		}
 
 		[Fact]
@@ -123,12 +123,12 @@ namespace Voron.Tests.Log
 				}
 			}
 
-			Assert.True(Env.Log.FilesInUse > 1);
-			var usedLogFiles = Env.Log.FilesInUse;
+			Assert.True(Env.Log.Files.Count > 1);
+			var usedLogFiles = Env.Log.Files.Count;
 
 			Env.FlushLogToDataFile();
 
-			Assert.True(Env.Log.FilesInUse <= 1 && Env.Log.FilesInUse < usedLogFiles);
+			Assert.True(Env.Log.Files.Count <= 1 && Env.Log.Files.Count < usedLogFiles);
 
 			for (var i = 0; i < 100; i++)
 			{

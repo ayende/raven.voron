@@ -6,6 +6,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -22,16 +23,18 @@ namespace Voron.Impl.Log
 		private readonly Func<string, IVirtualPager> _createLogFilePager;
 		private readonly IVirtualPager _dataPager;
 		private readonly bool _deleteUnusedLogFiles;
-		private readonly List<LogFile> _logFiles = new List<LogFile>();
 		private readonly Func<long, string> _logName = number => string.Format("{0:D19}.txlog", number);
 		private readonly bool _disposeLogFiles;
-		internal LogFile _currentFile;
+
 		private LogFile _splitLogFile;
 		private long _logIndex = -1;
 		private FileHeader* _fileHeader;
 		private IntPtr _inMemoryHeader;
 		private long _dataFlushCounter = 0;
 		private bool _disabled;
+
+		internal ImmutableList<LogFile> Files = ImmutableList<LogFile>.Empty;
+		internal LogFile CurrentFile;
 
 		public WriteAheadLog(StorageEnvironment env, Func<string, IVirtualPager> createLogFilePager, IVirtualPager dataPager,
 		                     long logFileSize, bool deleteUnusedLogFiles, bool disposeLogFiles)
@@ -47,28 +50,19 @@ namespace Voron.Impl.Log
 
 		public long LogFileSize { get; private set; }
 
-		public int FilesInUse
-		{
-			get { return _logFiles.Count; }
-		}
-
-		public LogInfo Info
-		{
-			get { return _fileHeader->LogInfo; }
-		}
-
 		private LogFile NextFile(Transaction tx)
 		{
 			_logIndex++;
 
 			var logPager = _createLogFilePager(_logName(_logIndex));
 
-			logPager.AllocateMorePages(tx, LogFileSize);
+			logPager.AllocateMorePages(null, LogFileSize);
 
 			var log = new LogFile(logPager, _logIndex);
-			log.AddRef();
+			log.AddRef(); // one reference added by a creator - write ahead log
+			tx.SetLogReference(log); // and the next one for the current transaction
 
-			_logFiles.Add(log);
+			Files = Files.Add(log);
 
 			UpdateLogInfo();
 			WriteFileHeader();
@@ -97,11 +91,11 @@ namespace Voron.Impl.Log
 					                               (LogFileSize/pager.PageSize) + " pages, while it has " +
 					                               pager.NumberOfAllocatedPages + " pages allocated.");
 				var log = new LogFile(pager, logNumber);
-				log.AddRef();
-				_logFiles.Add(log);
+				log.AddRef(); // creator reference - write ahead log
+				Files = Files.Add(log);
 			}
 
-			foreach (var logItem in _logFiles)
+			foreach (var logItem in Files)
 			{
 				long startRead = 0;
 
@@ -119,18 +113,18 @@ namespace Voron.Impl.Log
 
 		public void UpdateLogInfo()
 		{
-			_fileHeader->LogInfo.RecentLog = _logFiles.Count > 0 ? _logIndex : -1;
-			_fileHeader->LogInfo.LogFilesCount = _logFiles.Count;
+			_fileHeader->LogInfo.RecentLog = Files.Count > 0 ? _logIndex : -1;
+			_fileHeader->LogInfo.LogFilesCount = Files.Count;
 			_fileHeader->LogInfo.DataFlushCounter = _dataFlushCounter;
 		}
 
-		public void UpdateFileHeaderAfterDataFileSync(CommitSnapshot commitSnapshot)
+		public void UpdateFileHeaderAfterDataFileSync(CommitPoint commitPoint)
 		{
-			_fileHeader->TransactionId = commitSnapshot.TxId;
-			_fileHeader->LastPageNumber = commitSnapshot.TxLastPageNumber;
+			_fileHeader->TransactionId = commitPoint.TxId;
+			_fileHeader->LastPageNumber = commitPoint.TxLastPageNumber;
 
-			_fileHeader->LogInfo.LastSyncedLog = commitSnapshot.LogNumber;
-			_fileHeader->LogInfo.LastSyncedLogPage = commitSnapshot.LastWrittenLogPage;
+			_fileHeader->LogInfo.LastSyncedLog = commitPoint.LogNumber;
+			_fileHeader->LogInfo.LastSyncedLogPage = commitPoint.LastWrittenLogPage;
 			_fileHeader->LogInfo.DataFlushCounter = _dataFlushCounter;
 
 			_env.FreeSpaceHandling.CopyStateTo(&_fileHeader->FreeSpace);
@@ -164,21 +158,18 @@ namespace Voron.Impl.Log
 		{
 			if(_disabled)
 				return;
-
-			if (tx.Flags != TransactionFlags.ReadWrite)
-				return;
 			
-			if (_currentFile == null)
-				_currentFile = NextFile(tx);
+			if (CurrentFile == null)
+				CurrentFile = NextFile(tx);
 
 			if (_splitLogFile != null) // last split transaction was not committed
 			{
 				Debug.Assert(_splitLogFile.LastTransactionCommitted == false);
-				_currentFile = _splitLogFile;
+				CurrentFile = _splitLogFile;
 				_splitLogFile = null;
 			}
 
-			_currentFile.TransactionBegin(tx);
+			CurrentFile.TransactionBegin(tx);
 		}
 
 		public void TransactionCommit(Transaction tx)
@@ -192,20 +183,36 @@ namespace Voron.Impl.Log
 				_splitLogFile = null;
 			}
 
-			_currentFile.TransactionCommit(tx);
+			CurrentFile.TransactionCommit(tx);
 
-			if (_currentFile.AvailablePages < 2) // it must have at least one page for the next transaction header and one page for data
+			if (CurrentFile.AvailablePages < 2) // it must have at least one page for the next transaction header and one page for data
 			{
-				_currentFile = null; // it will force new log file creation when next transaction will start
+				CurrentFile = null; // it will force new log file creation when next transaction will start
 			}
 		}
 
 		public Page ReadPage(Transaction tx, long pageNumber)
 		{
-			// read log files from the back to get the most recent version of page
-			for (var i = _logFiles.Count - 1; i >= 0; i--)
+			// read transactions have to read from log snapshots
+			if (tx.Flags == TransactionFlags.Read)
 			{
-				var page = _logFiles[i].ReadPage(tx, pageNumber);
+				// read log snapshots from the back to get the most recent version of a page
+				for (var i = tx.LogSnapshots.Count -1; i >= 0; i--)
+				{
+					var page = tx.LogSnapshots[i].ReadPage(pageNumber);
+					if (page != null)
+						return page;
+				}
+
+				return null;
+			}
+
+			// write transactions can read directly from logs
+			var logs = Files; // thread safety copy
+
+			for (var i = logs.Count - 1; i >= 0; i--)
+			{
+				var page = logs[i].ReadPage(tx, pageNumber);
 				if (page != null)
 					return page;
 			}
@@ -215,7 +222,7 @@ namespace Voron.Impl.Log
 
 		public Page Allocate(Transaction tx, long startPage, int numberOfPages)
 		{
-			if (_currentFile.AvailablePages < numberOfPages)
+			if (CurrentFile.AvailablePages < numberOfPages)
 			{
 				if (_splitLogFile != null) // we are already in a split transaction and don't allow to spread a transaction over more than two log files
 					throw new InvalidOperationException(
@@ -225,38 +232,38 @@ namespace Voron.Impl.Log
 				// it will have th following transaction markers in the headers
 				// log_1: [Start|Split] log_2: [Split|Commit]
 
-				_currentFile.TransactionSplit(tx);
-				_splitLogFile = _currentFile;
+				CurrentFile.TransactionSplit(tx);
+				_splitLogFile = CurrentFile;
 
-				_currentFile = NextFile(tx);
-				_currentFile.AddRef();
+				CurrentFile = NextFile(tx);
 
-				_currentFile.TransactionSplit(tx);
+				CurrentFile.TransactionSplit(tx);
 			}
 
-			return _currentFile.Allocate(startPage, numberOfPages);
+			return CurrentFile.Allocate(startPage, numberOfPages);
 		}
-
 
 		public void ApplyLogsToDataFile()
 		{
-			if(_logFiles.Count == 0)
+			if(Files.Count == 0)
 				return;
+
+			var processingLogs = Files; // thread safety copy
 
 			var lastSyncedLog = _fileHeader->LogInfo.LastSyncedLog;
 			var lastSyncedPage = _fileHeader->LogInfo.LastSyncedLogPage;
 
-			Debug.Assert(_logFiles.First().Number >= lastSyncedLog);
+			Debug.Assert(processingLogs.First().Number >= lastSyncedLog);
 
 			var pagesToWrite = new Dictionary<long, Page>();
 
 			// read from the end in order to write only the most recent version of a page
-			var recentLogIndex = _logFiles.Count - 1;
-			var recentLogCommit = _logFiles[recentLogIndex].TakeSnapshot();
+			var recentLogIndex = processingLogs.Count - 1;
+			var recentLogCommit = processingLogs[recentLogIndex].LastCommit;
 
 			for (var i = recentLogIndex; i >= 0; i--)
 			{
-				var log = _logFiles[i];
+				var log = processingLogs[i];
 
 				foreach (var pageNumber in log.GetModifiedPages(log.Number == lastSyncedLog ? lastSyncedPage : (long?) null))
 				{
@@ -285,29 +292,25 @@ namespace Voron.Impl.Log
 
 			UpdateFileHeaderAfterDataFileSync(recentLogCommit);
 
-			var fullLogs = _logFiles.GetRange(0, recentLogIndex);
+			var fullLogs = processingLogs.GetRange(0, recentLogIndex);
 
 			foreach (var fullLog in fullLogs)
 			{
 				if (_deleteUnusedLogFiles)
 					fullLog.DeleteOnClose();
-
-				fullLog.OnDispose += x =>
-					{
-						if (_logFiles.Contains(x))
-							_logFiles.Remove(x);
-					};
 			}
 
 			UpdateLogInfo();
 
+			Files = Files.RemoveRange(0, recentLogIndex);
+
 			foreach (var fullLog in fullLogs)
 			{
-				fullLog.Release(); // TODO what if log was already released by WAL
+				fullLog.Release();
 			}
 
-			if (_logFiles.Count == 0)
-				_currentFile = null;
+			if (Files.Count == 0)
+				CurrentFile = null;
 
 			WriteFileHeader();
 
@@ -324,13 +327,13 @@ namespace Voron.Impl.Log
 
 			if(_disposeLogFiles)
 			{
-				foreach (var logFile in _logFiles)
+				foreach (var logFile in Files)
 				{
 					logFile.Dispose();
 				}
 			}
 
-			_logFiles.Clear();
+			Files.Clear();
 		}
 
 		private FileHeader* GetEmptyFileHeader()
@@ -366,20 +369,9 @@ namespace Voron.Impl.Log
 			return new DisposableAction(() => _disabled = false);
 		}
 
-		public void AddRef()
+		public List<LogSnapshot> GetSnapshots()
 		{
-			foreach (var logFile in _logFiles)
-			{
-				logFile.AddRef();
-			}
-		}
-
-		public void Release()
-		{
-			foreach (var logFile in _logFiles)
-			{
-				logFile.Release();
-			}
-		}
+			return Files.Select(x => x.GetSnapshot()).ToList();
+		} 
 	}
 }

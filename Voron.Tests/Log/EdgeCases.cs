@@ -29,8 +29,8 @@ namespace Voron.Tests.Log
 				tx.Commit();
 			}
 
-			Assert.Null(Env.Log._currentFile);
-			Assert.Equal(1, Env.Log.FilesInUse);
+			Assert.Null(Env.Log.CurrentFile);
+			Assert.Equal(1, Env.Log.Files.Count);
 		}
 	}
 }

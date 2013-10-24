@@ -29,9 +29,9 @@ namespace Voron.Tests.Log
 				//tx0.Commit(); intentionally
 			}
 
-			Assert.Equal(0, Env.Log._currentFile.AvailablePages);
+			Assert.Equal(0, Env.Log.CurrentFile.AvailablePages);
 
-			var writePositionAfterUncommittedTransaction = Env.Log._currentFile.WritePagePosition;
+			var writePositionAfterUncommittedTransaction = Env.Log.CurrentFile.WritePagePosition;
 
 			// should reuse pages allocated by uncommitted tx0
 			using (var tx1 = Env.NewTransaction(TransactionFlags.ReadWrite))
@@ -41,8 +41,8 @@ namespace Voron.Tests.Log
 				tx1.Commit();
 			}
 
-			Assert.Equal(0, Env.Log._currentFile.Number);
-			Assert.True(Env.Log._currentFile.WritePagePosition < writePositionAfterUncommittedTransaction);
+			Assert.Equal(0, Env.Log.CurrentFile.Number);
+			Assert.True(Env.Log.CurrentFile.WritePagePosition < writePositionAfterUncommittedTransaction);
 		}
 
 		[Fact]
@@ -77,14 +77,14 @@ namespace Voron.Tests.Log
 			// everything is done in one transaction but it takes 2 log files - transaction split
 			using (var tx = Env.NewTransaction(TransactionFlags.ReadWrite))
 			{
-				Assert.True(Env.Log.FilesInUse == 1);
+				Assert.True(Env.Log.Files.Count == 1);
 
 				for (int i = 0; i < 15; i++)
 				{
 					Env.Root.Add(tx, "item/" + i, new MemoryStream(bytes));
 				}
 
-				Assert.True(Env.Log.FilesInUse == 2); // verify that it really takes 2 pages
+				Assert.True(Env.Log.Files.Count == 2); // verify that it really takes 2 pages
 
 				// tx.Commit(); do not commit
 			}
@@ -92,7 +92,7 @@ namespace Voron.Tests.Log
 			using (var tx = Env.NewTransaction(TransactionFlags.ReadWrite))
 			{
 				// should go to first log because the last split transaction was uncommitted so we can reuse the pages allocated by it
-				Assert.Equal(0, Env.Log._currentFile.Number);
+				Assert.Equal(0, Env.Log.CurrentFile.Number);
 
 				Env.Root.Add(tx, "item/a", new MemoryStream(bytes));
 				

@@ -1,10 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 using Voron.Impl.FileHeaders;
 using Voron.Impl.FreeSpace;
 using Voron.Impl.Log;
 using Voron.Trees;
+using Voron.Util;
 
 namespace Voron.Impl
 {
@@ -23,6 +25,8 @@ namespace Voron.Impl
 		private readonly Dictionary<long, long> _dirtyPages = new Dictionary<long, long>();
 		private readonly List<long> _freedPages = new List<long>();
 		private readonly HashSet<PagerState> _pagerStates = new HashSet<PagerState>();
+		internal readonly List<LogSnapshot> LogSnapshots = new List<LogSnapshot>();
+		private readonly List<Action> _releaseLogActions = new List<Action>(); 
 		private readonly UnmanagedBits _freeSpaceBuffer;
 
 		public TransactionFlags Flags { get; private set; }
@@ -80,10 +84,16 @@ namespace Voron.Impl
 					PageMinSpace = _dataPager.PageMinSpace,
 					PageSize = _dataPager.PageSize
 				};
-			
-			_log.TransactionBegin(this);
 
-			_log.AddRef();
+			if (flags == TransactionFlags.ReadWrite)
+			{
+				_log.Files.ForEach(SetLogReference);
+				_log.TransactionBegin(this);
+			}
+			else
+			{
+				_log.GetSnapshots().ForEach(AddLogSnapshot);
+			}
 
 			foreach (var tree in env.Trees)
 			{
@@ -298,7 +308,10 @@ namespace Voron.Impl
 				pagerState.Release();
 			}
 
-			_log.Release();
+			foreach (var releaseLog in _releaseLogActions)
+			{
+				releaseLog();
+			}
 		}
 
 		public TreeDataInTransaction GetTreeInformation(Tree tree)
@@ -382,6 +395,21 @@ namespace Voron.Impl
 			return _multiValueTrees.Remove(keyToRemove);
 		}
 
+		private void AddLogSnapshot(LogSnapshot snapshot)
+		{
+			if (LogSnapshots.Any(x => x.File.Number == snapshot.File.Number))
+				throw new InvalidOperationException("Cannot add a snapshot of log file with number " + snapshot.File.Number +
+				                                    " to the transaction, because it already exists in a snapshot collection");
+
+			LogSnapshots.Add(snapshot);
+			SetLogReference(snapshot.File);
+		}
+
+		public void SetLogReference(LogFile log)
+		{
+			log.AddRef();
+			_releaseLogActions.Add(log.Release);
+		}
 	}
 
 	internal unsafe class TreeAndSliceComparer : IEqualityComparer<Tuple<Tree, Slice>>
