@@ -200,7 +200,8 @@ namespace Voron.Impl.Log
 		{
 			long logPageNumber;
 
-			if (_currentTxHeader != null && _currentTxHeader->TxId == tx.Id // we are in the log file where we are currently writing in
+			if (tx != null &&
+				_currentTxHeader != null && _currentTxHeader->TxId == tx.Id // we are in the log file where we are currently writing in
 				&& _transactionPageTranslationTable.TryGetValue(pageNumber, out logPageNumber))
 				return _pager.Read(logPageNumber);
 
