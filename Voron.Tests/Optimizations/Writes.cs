@@ -7,12 +7,12 @@
 using System.IO;
 using Xunit;
 
-namespace Voron.Tests.Mvcc
+namespace Voron.Tests.Optimizations
 {
-	public class Foo : StorageTest
+	public class Writes : StorageTest
 	{
 		[Fact]
-		public void Foo2()
+		public void SinglePageModificationDoNotCauseCopyingAllIntermediatePages()
 		{
 			using (var tx = Env.NewTransaction(TransactionFlags.ReadWrite))
 			{
@@ -37,17 +37,29 @@ namespace Voron.Tests.Mvcc
 				Env.Root.Add(tx, new string('7', 1300), new MemoryStream(new byte[1]));
 				
 				tx.Commit();
-
-				RenderAndShow(tx, Env.Root, 1);
 			}
+
+			var afterAdds = Env.NextPageNumber;
 
 			using (var tx = Env.NewTransaction(TransactionFlags.ReadWrite))
 			{
 				Env.Root.Delete(tx, new string('0', 1300));
 
-				tx.Commit();
+				Env.Root.Add(tx, new string('4', 1000), new MemoryStream(new byte[21]));
 
-				RenderAndShow(tx, Env.Root, 1);
+				tx.Commit();
+			}
+
+			Assert.Equal(afterAdds, Env.NextPageNumber);
+
+			// ensure changes were applied
+			using (var tx = Env.NewTransaction(TransactionFlags.Read))
+			{
+				Assert.Null(Env.Root.Read(tx, new string('0', 1300)));
+
+				var readResult = Env.Root.Read(tx, new string('4', 1000));
+
+				Assert.Equal(21, readResult.Stream.Length);
 			}
 		}
 	}
