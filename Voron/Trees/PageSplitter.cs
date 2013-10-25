@@ -30,7 +30,8 @@ namespace Voron.Trees
 	        _nodeVersion = nodeVersion;
             _cursor = cursor;
             _txInfo = txInfo;
-            _page = _cursor.Pop();
+            _page = tx.ModifyPage(_cursor.Pages.First.Value.PageNumber, _cursor);
+	        _cursor.Pop();
         }
 
         public byte* Execute()
@@ -158,7 +159,6 @@ namespace Voron.Trees
             }
             _page.Truncate(_tx, splitIndex);
 
-            byte* dataPos;
             // actually insert the new key
             return (currentIndex > splitIndex || newPosition && currentIndex == splitIndex)
                 ? InsertNewKey(rightPage) : InsertNewKey(_page);
