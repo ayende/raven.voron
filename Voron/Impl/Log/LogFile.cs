@@ -137,7 +137,7 @@ namespace Voron.Impl.Log
 
 		public void TransactionCommit(Transaction tx)
 		{
-			_pageTranslationTable = _pageTranslationTable.AddRange(_transactionPageTranslationTable);
+			_pageTranslationTable = _pageTranslationTable.SetItems(_transactionPageTranslationTable);
 
 			LastCommit = new CommitPoint()
 				{
@@ -292,7 +292,7 @@ namespace Voron.Impl.Log
 					throw new InvalidDataException("Checksum mismatch"); //TODO this is temporary, ini the future this condition will just mean that transaction was not committed
 				}
 
-				_pageTranslationTable = _pageTranslationTable.AddRange(transactionPageTranslation);
+				_pageTranslationTable = _pageTranslationTable.SetItems(transactionPageTranslation);
 			}
 
 			return lastReadHeader;
