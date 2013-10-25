@@ -22,7 +22,7 @@ namespace Voron.Impl
 		private TreeDataInTransaction _rootTreeData;
 		private Dictionary<Tuple<Tree, Slice>, Tree> _multiValueTrees;
 		private readonly Dictionary<Tree, TreeDataInTransaction> _treesInfo = new Dictionary<Tree, TreeDataInTransaction>();
-		private readonly Dictionary<long, long> _dirtyPages = new Dictionary<long, long>();
+		private readonly HashSet<long> _dirtyPages = new HashSet<long>();
 		private readonly List<long> _freedPages = new List<long>();
 		private readonly HashSet<PagerState> _pagerStates = new HashSet<PagerState>();
 		internal readonly List<LogSnapshot> LogSnapshots = new List<LogSnapshot>();
@@ -103,18 +103,10 @@ namespace Voron.Impl
 
 		public unsafe Page ModifyPage(long p, Cursor c)
 		{
-			long dirtyPageNum;
 			Page page;
-			if (_dirtyPages.TryGetValue(p, out dirtyPageNum))
+			if (_dirtyPages.Contains(p))
 			{
-                page = c.GetPage(dirtyPageNum);
-			    
-				if(page == null)
-                    page = _log.ReadPage(this, dirtyPageNum);
-
-				if (page == null)
-					page = _dataPager.Read(dirtyPageNum);
-
+                page = c.GetPage(p) ?? _log.ReadPage(this, p);
                 page.Dirty = true;
 				
                 return page;
@@ -122,7 +114,7 @@ namespace Voron.Impl
 
 			page = c.GetPage(p) ?? _log.ReadPage(this, p) ?? _dataPager.Read(p);
 
-			var newPage = AllocatePage(1, p);
+			var newPage = AllocatePage(1, p); // allocate new page in a log file but with the same number
 			
 			NativeMethods.memcpy(newPage.Base, page.Base, _dataPager.PageSize);
 			newPage.LastSearchPosition = page.LastSearchPosition;
@@ -133,10 +125,6 @@ namespace Voron.Impl
 
 		public Page GetReadOnlyPage(long n)
 		{
-			long dirtyPage;
-			if (_dirtyPages.TryGetValue(n, out dirtyPage))
-				n = dirtyPage;
-
 			return _log.ReadPage(this, n) ?? _dataPager.Read(n);
 		}
 
@@ -172,7 +160,7 @@ namespace Voron.Impl
 			page.Upper = (ushort) _dataPager.PageSize;
 			page.Dirty = true;
 
-		    _dirtyPages[page.PageNumber] = page.PageNumber;
+		    _dirtyPages.Add(page.PageNumber);
 			return page;
 		}
 
