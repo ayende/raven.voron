@@ -89,7 +89,9 @@ namespace Voron.Trees
 
 				var txInfo = tx.GetTreeInformation(this);
 
-				page = tx.ModifyCursor(txInfo, cursor);
+				page = tx.ModifyPage(page.PageNumber, cursor);
+
+				cursor.Update(cursor.Pages.First, page);
 
 				var item = page.GetNode(page.LastSearchPosition);
 
@@ -141,7 +143,9 @@ namespace Voron.Trees
 
 				var txInfo = tx.GetTreeInformation(this);
 
-				page = tx.ModifyCursor(txInfo, cursor);
+				page = tx.ModifyPage(page.PageNumber, cursor);
+
+				cursor.Update(cursor.Pages.First, page);
 
 				var item = page.GetNode(page.LastSearchPosition);
 
@@ -182,9 +186,11 @@ namespace Voron.Trees
 			{
 				var txInfo = tx.GetTreeInformation(this);
 
-				FindPageFor(tx, key, cursor);
+				var foundPage = FindPageFor(tx, key, cursor);
 
-				var page = tx.ModifyCursor(this, cursor);
+				var page = tx.ModifyPage(foundPage.PageNumber, cursor);
+
+				cursor.Update(cursor.Pages.First, page);
 
 				ushort nodeVersion = 0;
 				if (page.LastMatch == 0) // this is an update operation
@@ -248,8 +254,10 @@ namespace Voron.Trees
 		{
 			using (var cursor = tx.NewCursor(this))
 			{
-				FindPageFor(tx, key, cursor);
-				var page = tx.ModifyCursor(this, cursor);
+				var foundPage = FindPageFor(tx, key, cursor);
+				var page = tx.ModifyPage(foundPage.PageNumber, cursor);
+
+				cursor.Update(cursor.Pages.First, page);
 
 				if (page.LastMatch != 0)
 					return false; // not there
@@ -402,7 +410,9 @@ namespace Voron.Trees
 				if (page.LastMatch != 0)
 					return; // not an exact match, can't delete
 
-				page = tx.ModifyCursor(this, cursor);
+				page = tx.ModifyPage(page.PageNumber, cursor);
+
+				cursor.Update(cursor.Pages.First, page);
 
 				txInfo.State.EntriesCount--;
 				ushort nodeVersion;

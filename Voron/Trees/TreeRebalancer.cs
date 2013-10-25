@@ -99,9 +99,9 @@ namespace Voron.Trees
             Page sibling;
             if (parentPage.LastSearchPosition == 0) // we are the left most item
             {
-                _tx.ModifyCursor(_txInfo, c);
+
                 parentPage.LastSearchPosition = 1;
-                sibling = _tx.ModifyPage(_txInfo.Tree, parentPage, parentPage.GetNode(1)->PageNumber, c);
+                sibling = _tx.ModifyPage(parentPage.GetNode(1)->PageNumber, c);
                 parentPage.LastSearchPosition = 0;
                 sibling.LastSearchPosition = 0;
                 page.LastSearchPosition = page.NumberOfEntries;
@@ -109,12 +109,11 @@ namespace Voron.Trees
             }
             else // there is at least 1 page to our left
             {
-                _tx.ModifyCursor(_txInfo, c);
                 var beyondLast = parentPage.LastSearchPosition == parentPage.NumberOfEntries;
                 if (beyondLast)
                     parentPage.LastSearchPosition--;
                 parentPage.LastSearchPosition--;
-                sibling = _tx.ModifyPage(_txInfo.Tree, parentPage, parentPage.GetNode(parentPage.LastSearchPosition)->PageNumber, c);
+                sibling = _tx.ModifyPage(parentPage.GetNode(parentPage.LastSearchPosition)->PageNumber, c);
                 parentPage.LastSearchPosition++;
                 if (beyondLast)
                     parentPage.LastSearchPosition++;
@@ -256,13 +255,12 @@ namespace Voron.Trees
             var node = page.GetNode(0);
             Debug.Assert(node->Flags == (NodeFlags.PageRef));
 
-            _tx.ModifyCursor(txInfo, cursor);
             txInfo.State.LeafPages = 1;
             txInfo.State.BranchPages = 0;
             txInfo.State.Depth = 1;
             txInfo.State.PageCount = 1;
 
-            var rootPage = _tx.ModifyPage(_txInfo.Tree, null, node->PageNumber, cursor);
+            var rootPage = _tx.ModifyPage(node->PageNumber, cursor);
             txInfo.RootPageNumber = rootPage.PageNumber;
 
             Debug.Assert(rootPage.Dirty);

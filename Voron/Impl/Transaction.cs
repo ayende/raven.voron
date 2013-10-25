@@ -101,30 +101,7 @@ namespace Voron.Impl
 			}
 		}
 
-		public Page ModifyCursor(Tree tree, Cursor c)
-		{
-			var txInfo = GetTreeInformation(tree);
-			return ModifyCursor(txInfo, c);
-		}
-
-		public Page ModifyCursor(TreeDataInTransaction txInfo, Cursor c)
-		{
-			Debug.Assert(c.Pages.Count > 0); // cannot modify an empty cursor
-
-			var node = c.Pages.Last;
-			while (node != null)
-			{
-				var parent = node.Next != null ? node.Next.Value : null;
-				c.Update(node, ModifyPage(txInfo.Tree, parent, node.Value.PageNumber, c));
-				node = node.Previous;
-			}
-
-			txInfo.RootPageNumber = c.Pages.Last.Value.PageNumber;
-
-			return c.Pages.First.Value;
-		}
-
-		public unsafe Page ModifyPage(Tree tree, Page parent, long p, Cursor c)
+		public unsafe Page ModifyPage(long p, Cursor c)
 		{
 			long dirtyPageNum;
 			Page page;
@@ -140,33 +117,18 @@ namespace Voron.Impl
 
                 page.Dirty = true;
 				
-                UpdateParentPageNumber(parent, page.PageNumber);
-				
                 return page;
 			}
-			var newPage = AllocatePage(1);
-			var newPageNum = newPage.PageNumber;
+
 			page = c.GetPage(p) ?? _log.ReadPage(this, p) ?? _dataPager.Read(p);
+
+			var newPage = AllocatePage(1, p);
+			
 			NativeMethods.memcpy(newPage.Base, page.Base, _dataPager.PageSize);
 			newPage.LastSearchPosition = page.LastSearchPosition;
 			newPage.LastMatch = page.LastMatch;
-			newPage.PageNumber = newPageNum;
-			FreePage(p);
-			_dirtyPages[p] = newPage.PageNumber;
-			UpdateParentPageNumber(parent, newPage.PageNumber);
+
 			return newPage;
-		}
-
-		private static unsafe void UpdateParentPageNumber(Page parent, long pageNumber)
-		{
-			if (parent == null)
-				return;
-
-			if (parent.Dirty == false)
-				throw new InvalidOperationException("The parent page must already been dirtied, but wasn't");
-
-			var node = parent.GetNode(parent.LastSearchPositionOrLastEntry);
-			node->PageNumber = pageNumber;
 		}
 
 		public Page GetReadOnlyPage(long n)
@@ -191,18 +153,21 @@ namespace Voron.Impl
 		    return page;
 		}
 
-		public Page AllocatePage(int numberOfPages)
+		public Page AllocatePage(int numberOfPages, long? pageNumber = null)
 		{
-			var pageNum = TryAllocateFromFreeSpace(numberOfPages);
-			if (pageNum == null) // allocate from end of file
+			if (pageNumber == null)
 			{
-			    pageNum = NextPageNumber;
-				NextPageNumber += numberOfPages;
+				pageNumber = TryAllocateFromFreeSpace(numberOfPages);
+				if (pageNumber == null) // allocate from end of file
+				{
+					pageNumber = NextPageNumber;
+					NextPageNumber += numberOfPages;
+				}
 			}
 
-			var page = _log.Allocate(this, pageNum.Value, numberOfPages);
+			var page = _log.Allocate(this, pageNumber.Value, numberOfPages);
 
-			page.PageNumber = pageNum.Value;
+			page.PageNumber = pageNumber.Value;
 			page.Lower = (ushort) Constants.PageHeaderSize;
 			page.Upper = (ushort) _dataPager.PageSize;
 			page.Dirty = true;
@@ -239,7 +204,7 @@ namespace Voron.Impl
 				var txInfo = kvp.Value;
 				var tree = kvp.Key;
 
-				if (txInfo.RootPageNumber == tree.State.RootPageNumber &&
+				if (false && // TODO txInfo.RootPageNumber == tree.State.RootPageNumber && - now we can make a change without changing it's page number
 				    (modifiedTrees == null || modifiedTrees.ContainsKey(tree.Name) == false))
 					continue; // not modified
 

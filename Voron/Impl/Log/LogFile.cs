@@ -139,6 +139,8 @@ namespace Voron.Impl.Log
 		{
 			_pageTranslationTable = _pageTranslationTable.SetItems(_transactionPageTranslationTable);
 
+			_transactionPageTranslationTable.Clear();
+
 			LastCommit = new CommitPoint()
 				{
 					LogNumber = Number,
