@@ -37,7 +37,6 @@ namespace Voron.Trees
             header->LeafPages = LeafPages;
             header->OverflowPages = OverflowPages;
             header->PageCount = PageCount;
-            header->EntriesCount = EntriesCount;
             header->RootPageNumber = RootPageNumber;
         }
 

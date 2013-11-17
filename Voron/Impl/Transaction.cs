@@ -259,16 +259,18 @@ namespace Voron.Impl
             State.Root.State.InWriteTransaction = false;
             State.FreeSpaceRoot.State.InWriteTransaction = false;
 
-            foreach (var treeKvp in State.Trees)
+			var root = State.Root;
+			foreach (var treeKvp in State.Trees)
             {
-                treeKvp.Value.State.InWriteTransaction = false;
                 var treeState = treeKvp.Value.State;
-                if (treeState.IsModified)
+                if (treeState.IsModified && ShouldUpdateTreeHeader(root, treeKvp.Key, treeState))
                 {
-                    var treePtr = (TreeRootHeader*)State.Root.DirectAdd(this, treeKvp.Key, sizeof(TreeRootHeader));
-                    treeState.CopyTo(treePtr);
-                }
-            }
+					var treePtr = (TreeRootHeader*)root.DirectAdd(this, treeKvp.Key, sizeof(TreeRootHeader));
+					treeState.CopyTo(treePtr);
+				}
+			
+				treeKvp.Value.State.InWriteTransaction = false;
+			}
 
 #if DEBUG
             if (State.Root != null && State.FreeSpaceRoot != null)
@@ -313,7 +315,7 @@ namespace Voron.Impl
         }
 
 
-        private unsafe void FlushAllMultiValues()
+        private void FlushAllMultiValues()
         {
             if (_multiValueTrees == null)
                 return;
@@ -324,14 +326,25 @@ namespace Voron.Impl
                 var key = multiValueTree.Key.Item2;
                 var childTree = multiValueTree.Value;
 
-                var trh = (TreeRootHeader*)parentTree.DirectAdd(this, key, sizeof(TreeRootHeader));
-                childTree.State.CopyTo(trh);
-
-                parentTree.SetAsMultiValueTreeRef(this, key);
+				if (ShouldUpdateTreeHeader(parentTree, key, childTree.State))
+	            {
+		            var trh = (TreeRootHeader*) parentTree.DirectAdd(this, key, sizeof (TreeRootHeader));
+		            childTree.State.CopyTo(trh);
+	            }
+	            parentTree.SetAsMultiValueTreeRef(this, key);
             }
         }
 
-        public void Dispose()
+	    private bool ShouldUpdateTreeHeader(Tree tree, Slice key, TreeMutableState state)
+	    {
+		    var existingTreeHeader = (TreeRootHeader*) tree.DirectRead(this, key);
+		    TreeRootHeader tempHeader;
+			state.CopyTo(&tempHeader);
+
+		    return NativeMethods.memcmp((byte*) existingTreeHeader, (byte*) &tempHeader, sizeof (TreeRootHeader)) != 0;
+	    }
+
+	    public void Dispose()
         {
             if (!Committed && !RolledBack && Flags == TransactionFlags.ReadWrite)
                 Rollback();

@@ -39,19 +39,19 @@ namespace Voron.Impl.FileHeaders
         /// <summary>
         /// The root node for the main tree
         /// </summary>
-        [FieldOffset(90)]
+        [FieldOffset(81)]
         public TreeRootHeader Root;
 
         /// <summary>
         /// Information about the journal log info
         /// </summary>
-        [FieldOffset(152)] 
+        [FieldOffset(134)] 
         public JournalInfo Journal;
 
 		/// <summary>
 		/// Information about an incremental backup
 		/// </summary>
-	    [FieldOffset(192)] 
+	    [FieldOffset(174)] 
 		public IncrementalBackupInfo IncrementalBackup;
     }
 }
