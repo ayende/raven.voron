@@ -52,6 +52,10 @@ namespace Voron.Tryout
 					{
 						s.BatchDelete();
 					}
+				    var s2 = new MultiAdds();
+                    {
+                        s2.SplitterIssue();
+                    }
 					Console.WriteLine("Success");
 				}
 				catch (Exception e)
