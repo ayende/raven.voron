@@ -92,7 +92,12 @@ namespace Voron.Impl
                     HandleActualWrites(write);
                 }
 
-                _hasWritesEvent.Wait(cancellationToken);
+                if (_hasWritesEvent.Wait(TimeSpan.FromMinutes(1), cancellationToken) == false)
+                {
+                    Console.WriteLine("WTF?!");
+                    Console.WriteLine(_pendingWrites.Count);
+                    Environment.Exit(-1);
+                }
             }
         }
 
@@ -106,22 +111,14 @@ namespace Voron.Impl
                 {
                     HandleOperations(tx, writes.SelectMany(x => x.Batch.Operations));
 
-                    tx.Commit().ContinueWith(task =>
-                    {
-                        if (task.IsFaulted)
-                        {
-                            HandleWriteFailure(writes, mine, task.Exception);
-                        }
-                        else
-                        {
-                            if (ShouldRecordToDebugJournal)
-                                _debugJournal.Flush();
+                    tx.Commit();
 
-                            foreach (var write in writes)
-                                write.Completed();
-                        }
-                    });
-                }        
+                    if (ShouldRecordToDebugJournal)
+                        _debugJournal.Flush();
+
+                    foreach (var write in writes)
+                        write.Completed();
+                }
             }
             catch (Exception e)
             {
@@ -216,18 +213,8 @@ namespace Voron.Impl
 			        using (var tx = _env.NewTransaction(TransactionFlags.ReadWrite))
 			        {
 				        HandleOperations(tx, write.Batch.Operations);
-				        tx.Commit().ContinueWith(
-					        task =>
-						        {
-							        if (task.IsFaulted)
-							        {
-								        write.Errored(task.Exception);
-							        }
-							        else
-							        {
-								        write.Completed();
-							        }
-						        });
+			            tx.Commit();
+			            write.Completed();
 			        }
 		        }
 		        catch (Exception e)
