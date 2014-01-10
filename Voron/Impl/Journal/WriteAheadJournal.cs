@@ -272,9 +272,15 @@ namespace Voron.Impl.Journal
 							return null;
 						}
 
+						value.ScratchPos.AddReadRef();
+						tx.AddReadPage(value.ScratchPos);
+
 						var page = _env.ScratchBufferPool.ReadPage(value.ScratchPos);
 
-						Debug.Assert(page.PageNumber == pageNumber);
+						if (page.PageNumber != pageNumber)
+						{
+							var a = 9;
+						}
 
 						return page;
 					}
@@ -387,7 +393,7 @@ namespace Voron.Impl.Journal
 
 					Debug.Assert(jrnls.First().Number >= _lastSyncedJournal);
 
-					var pagesToWrite = new Dictionary<long, long>();
+					var pagesToWrite = new Dictionary<long, PageFromScratchBuffer>();
 
 					long lastProcessedJournal = -1;
 					long previousJournalMaxTransactionId = -1;
@@ -507,7 +513,7 @@ namespace Voron.Impl.Journal
 				}
 			}
 
-			private void ApplyPagesToDataFileFromScratch(Dictionary<long, long> pagesToWrite, Transaction transaction, bool alreadyInWriteTx)
+			private void ApplyPagesToDataFileFromScratch(Dictionary<long, PageFromScratchBuffer> pagesToWrite, Transaction transaction, bool alreadyInWriteTx)
 			{
 				var scratchBufferPool = _waj._env.ScratchBufferPool;
 				var scratchPagerState = scratchBufferPool.PagerState;
@@ -666,7 +672,7 @@ namespace Voron.Impl.Journal
 			var compressionBuffer = compressionPager.AcquirePagePointer(dataPagesCount);
 
 			var write = tempBuffer;
-			var txPages = tx.GetTransactionPages();
+			var txPages = tx.GetWrittenTransactionPages();
 
 			for (int index = 1; index < txPages.Count; index++)
 			{

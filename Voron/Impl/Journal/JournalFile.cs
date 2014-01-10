@@ -31,7 +31,7 @@ namespace Voron.Impl.Journal
 
         public class PagePosition
         {
-            public long ScratchPos;
+			public PageFromScratchBuffer ScratchPos;
             public long JournalPos;
             public long TransactionId;
         }
@@ -140,7 +140,7 @@ namespace Voron.Impl.Journal
 
         public void Write(Transaction tx, byte*[] pages)
         {
-            var txPages = tx.GetTransactionPages();
+            var txPages = tx.GetWrittenTransactionPages();
 
             var ptt = new Dictionary<long, PagePosition>();
             var unused = new List<PagePosition>();
@@ -163,7 +163,7 @@ namespace Voron.Impl.Journal
 		    for (int index = 1; index < txPages.Count; index++)
 		    {
 			    var txPage = txPages[index];
-			    var scratchPage = tx.Environment.ScratchBufferPool.ReadPage(txPage.PositionInScratchBuffer);
+			    var scratchPage = tx.Environment.ScratchBufferPool.ReadPage(txPage);
 			    var pageNumber = ((PageHeader*)scratchPage.Base)->PageNumber;
 			    PagePosition value;
 			    if (_pageTranslationTable.TryGetValue(tx, pageNumber, out value))
@@ -173,7 +173,7 @@ namespace Voron.Impl.Journal
 
 			    ptt[pageNumber] = new PagePosition
 			    {
-				    ScratchPos = txPage.PositionInScratchBuffer,
+				    ScratchPos = txPage,
 				    JournalPos = -1, // needed only during recovery and calculated there
 				    TransactionId = tx.Id
 			    };

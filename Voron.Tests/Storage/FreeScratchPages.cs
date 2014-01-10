@@ -30,7 +30,7 @@ namespace Voron.Tests.Storage
 					tx.State.Root.Add(tx, "items/" + i, new MemoryStream(buffer));
 				}
 
-				scratchPagesOfUncommittedTransaction = tx.GetTransactionPages();
+				scratchPagesOfUncommittedTransaction = tx.GetWrittenTransactionPages();
 
 				// tx.Commit() - intentionally not committing
 			}
@@ -45,7 +45,7 @@ namespace Voron.Tests.Storage
 					tx.State.Root.Add(tx, "items/" + i, new MemoryStream(buffer));
 				}
 
-				scratchPagesOfCommittedTransaction = tx.GetTransactionPages();
+				scratchPagesOfCommittedTransaction = tx.GetWrittenTransactionPages();
 
 				tx.Commit();
 			}

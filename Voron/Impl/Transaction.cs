@@ -56,7 +56,8 @@ namespace Voron.Impl
 		private int _allocatedPagesInTransaction;
 		private int _overflowPagesInTransaction;
 		private TransactionHeader* _txHeader;
-		private readonly List<PageFromScratchBuffer> _transactionPages = new List<PageFromScratchBuffer>();
+		private readonly List<PageFromScratchBuffer> _writtenTransactionPages = new List<PageFromScratchBuffer>();
+		private readonly List<PageFromScratchBuffer> _readPagesFromScratch = new List<PageFromScratchBuffer>();
 
 		public bool Committed { get; private set; }
 
@@ -101,8 +102,8 @@ namespace Voron.Impl
 		private void InitTransactionHeader()
 		{
 			var allocation = _env.ScratchBufferPool.Allocate(this, 1);
-			var page = _env.ScratchBufferPool.ReadPage(allocation.PositionInScratchBuffer);
-			_transactionPages.Add(allocation);
+			var page = _env.ScratchBufferPool.ReadPage(allocation);
+			_writtenTransactionPages.Add(allocation);
 			NativeMethods.memset(page.Base, 0, AbstractPager.PageSize);
 			_txHeader = (TransactionHeader*)page.Base;
 			_txHeader->HeaderMarker = Constants.TransactionHeaderMarker;
@@ -173,7 +174,7 @@ namespace Voron.Impl
 		    Page p;
 			if (_scratchPagesTable.TryGetValue(pageNumber, out value))
 			{
-			    p = _env.ScratchBufferPool.ReadPage(value.PositionInScratchBuffer);
+			    p = _env.ScratchBufferPool.ReadPage(value);
 			}
 			else
 			{
@@ -214,9 +215,10 @@ namespace Voron.Impl
 			Debug.Assert(pageNumber < State.NextPageNumber);
 
 			var pageFromScratchBuffer = _env.ScratchBufferPool.Allocate(this, numberOfPages);
-			_transactionPages.Add(pageFromScratchBuffer);
+			_writtenTransactionPages.Add(pageFromScratchBuffer);
 
-			var page = _env.ScratchBufferPool.ReadPage(pageFromScratchBuffer.PositionInScratchBuffer);
+			var page = _env.ScratchBufferPool.ReadPage(pageFromScratchBuffer);
+
 			page.PageNumber = pageNumber.Value;
 
 			_allocatedPagesInTransaction++;
@@ -318,9 +320,9 @@ namespace Voron.Impl
 			if (Committed || RolledBack || Flags != (TransactionFlags.ReadWrite))
 				return;
 
-			foreach (var pageFromScratch in _transactionPages)
+			foreach (var pageFromScratch in _writtenTransactionPages)
 			{
-				_env.ScratchBufferPool.Free(pageFromScratch.PositionInScratchBuffer);
+				_env.ScratchBufferPool.Free(pageFromScratch);
 			}
 
 			RolledBack = true;
@@ -354,6 +356,11 @@ namespace Voron.Impl
 			foreach (var pagerState in _pagerStates)
 			{
 				pagerState.Release();
+			}
+
+			foreach (var readPage in _readPagesFromScratch)
+			{
+				readPage.ReleaseReadRef();
 			}
 		}
 
@@ -428,9 +435,9 @@ namespace Voron.Impl
 			JournalSnapshots.Add(snapshot);
 		}
 
-		public List<PageFromScratchBuffer> GetTransactionPages()
+		public List<PageFromScratchBuffer> GetWrittenTransactionPages()
 		{
-			return _transactionPages;
+			return _writtenTransactionPages;
 		}
 
 		public RecentlyFoundPages GetRecentlyFoundPages(Tree tree)
@@ -454,6 +461,11 @@ namespace Voron.Impl
 		        _recentlyFoundPages[tree] = pages = new RecentlyFoundPages(Flags == TransactionFlags.Read ? 8 : 2);
 
 			pages.Add(foundPage);
+		}
+
+		public void AddReadPage(PageFromScratchBuffer scratchPage)
+		{
+			_readPagesFromScratch.Add(scratchPage);
 		}
 	}
 }
