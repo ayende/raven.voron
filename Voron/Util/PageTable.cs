@@ -63,21 +63,31 @@ namespace Voron.Util
 			_maxSeenTransaction = tx.Id;
 		}
 
-		public void Remove(IEnumerable<long> pages, long lastSyncedTransactionId)
+		public List<PageFromScratchBuffer> RemovePagesOlderThan(long lastSyncedTransactionId)
 		{
-			foreach (var page in pages)
-			{
-				ImmutableAppendOnlyList<PageValue> list;
-				if (_values.TryGetValue(page, out list) == false)
-					continue;
+			var removed = new List<PageValue>();
+			var changedPages = new Dictionary<long, ImmutableAppendOnlyList<PageValue>>();
 
-				var newList = list.RemoveWhile(value => value.Transaction <= lastSyncedTransactionId);
+			foreach (var pages in _values)
+			{
+				var newList = pages.Value.RemoveWhile(x => x.Transaction <= lastSyncedTransactionId, removed);
+				changedPages.Add(pages.Key, newList);
+			}
+
+			ImmutableAppendOnlyList<PageValue> _;
+
+			foreach (var changedPage in changedPages)
+			{
+				var page = changedPage.Key;
+				var newList = changedPage.Value;
 
 				if (newList.Count != 0)
 					_values.AddOrUpdate(page, newList, (l, values) => newList);
 				else
-					_values.TryRemove(page, out list);
+					_values.TryRemove(page, out _);
 			}
+
+			return removed.Select(x => x.Value.ScratchPos).ToList();
 		}
 
 		public bool TryGetValue(Transaction tx, long page, out JournalFile.PagePosition value)
@@ -96,6 +106,7 @@ namespace Voron.Util
 					continue;
 
 				value = it.Value;
+
 				Debug.Assert(value != null);
 				return true;
 			}
@@ -110,17 +121,6 @@ namespace Voron.Util
 			return _values.Values.Select(x => x[x.Count - 1].Value)
 				.Where(x => x != null)
 				.Max(x => x.TransactionId);
-		}
-
-		public List<KeyValuePair<long, JournalFile.PagePosition>> AllPagesOlderThan(long oldestActiveTransaction)
-		{
-			return _values.Where(x =>
-			{
-				var val = x.Value[x.Value.Count - 1];
-				return val.Value.TransactionId < oldestActiveTransaction;
-			}).Select(x => new KeyValuePair<long, JournalFile.PagePosition>(x.Key, x.Value[x.Value.Count - 1].Value))
-				.ToList();
-
 		}
 
 		public void SetItemsNoTransaction(Dictionary<long, JournalFile.PagePosition> ptt)

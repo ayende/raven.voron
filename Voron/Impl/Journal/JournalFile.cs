@@ -26,7 +26,6 @@ namespace Voron.Impl.Journal
         private bool _disposed;
         private int _refs;
         private readonly PageTable _pageTranslationTable = new PageTable();
-        private readonly List<PagePosition> _unusedPages = new List<PagePosition>();
         private readonly object _locker = new object();
 
         public class PagePosition
@@ -143,33 +142,26 @@ namespace Voron.Impl.Journal
             var txPages = tx.GetWrittenTransactionPages();
 
             var ptt = new Dictionary<long, PagePosition>();
-            var unused = new List<PagePosition>();
             var writePagePos = _writePage;
 
-            UpdatePageTranslationTable(tx, txPages, unused, ptt);
+            UpdatePageTranslationTable(tx, txPages,ptt);
 
             lock (_locker)
             {
                 _writePage += pages.Length;
                 _pageTranslationTable.SetItems(tx, ptt);
-                _unusedPages.AddRange(unused);
             }
 
             _journalWriter.WriteGather(writePagePos * AbstractPager.PageSize, pages);
         }
 
-	    private unsafe void UpdatePageTranslationTable(Transaction tx, List<PageFromScratchBuffer> txPages, List<PagePosition> unused, Dictionary<long, PagePosition> ptt)
+	    private unsafe void UpdatePageTranslationTable(Transaction tx, List<PageFromScratchBuffer> txPages, Dictionary<long, PagePosition> ptt)
 	    {
 		    for (int index = 1; index < txPages.Count; index++)
 		    {
 			    var txPage = txPages[index];
 			    var scratchPage = tx.Environment.ScratchBufferPool.ReadPage(txPage);
 			    var pageNumber = ((PageHeader*)scratchPage.Base)->PageNumber;
-			    PagePosition value;
-			    if (_pageTranslationTable.TryGetValue(tx, pageNumber, out value))
-			    {
-				    unused.Add(value);
-			    }
 
 			    ptt[pageNumber] = new PagePosition
 			    {
@@ -190,26 +182,16 @@ namespace Voron.Impl.Journal
 
         public void FreeScratchPagesOlderThan(StorageEnvironment env, long lastSyncedTransactionId)
         {
-            List<KeyValuePair<long, PagePosition>> unusedPages;
+            List<PageFromScratchBuffer> unusedPages;
 
-            List<PagePosition> unusedAndFree;
             lock (_locker)
             {
-                unusedAndFree = _unusedPages.FindAll(position => position.TransactionId < lastSyncedTransactionId);
-                _unusedPages.RemoveAll(position => position.TransactionId < lastSyncedTransactionId);
-
-                unusedPages = _pageTranslationTable.AllPagesOlderThan(lastSyncedTransactionId);
-                _pageTranslationTable.Remove(unusedPages.Select(x => x.Key), lastSyncedTransactionId);
-            }
-
-            foreach (var unusedScratchPage in unusedAndFree)
-            {
-                env.ScratchBufferPool.Free(unusedScratchPage.ScratchPos);
+				unusedPages = _pageTranslationTable.RemovePagesOlderThan(lastSyncedTransactionId);
             }
 
             foreach (var unusedScratchPage in unusedPages)
             {
-                env.ScratchBufferPool.Free(unusedScratchPage.Value.ScratchPos);
+                env.ScratchBufferPool.Free(unusedScratchPage);
             }
         }
     }
