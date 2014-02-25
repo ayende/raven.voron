@@ -9,7 +9,6 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Threading;
-using System.Threading.Tasks;
 using Voron.Exceptions;
 using Voron.Impl.FileHeaders;
 using Voron.Impl.Paging;
@@ -18,8 +17,6 @@ using Voron.Util;
 
 namespace Voron.Impl.Journal
 {
-	using System.IO;
-
 	public unsafe class WriteAheadJournal : IDisposable
 	{
 		private readonly StorageEnvironment _env;
@@ -37,8 +34,7 @@ namespace Voron.Impl.Journal
 		internal JournalFile CurrentFile;
 
 		private readonly HeaderAccessor _headerAccessor;
-
-		private IVirtualPager _compressionPager;
+		private readonly IVirtualPager _compressionPager;
 
 		public WriteAheadJournal(StorageEnvironment env)
 		{
@@ -349,6 +345,45 @@ namespace Voron.Impl.Journal
 			CurrentFile = null;
 		}
 
+		public class JournalSyncEventArgs : EventArgs
+		{
+			public long OldestTransactionId { get; private set; }
+
+			public JournalSyncEventArgs(long oldestTransactionId)
+			{
+				OldestTransactionId = oldestTransactionId;
+			}
+		}
+
+		public class JournalShipper : IDisposable
+		{
+			private long _lastShippedTransactionId;
+			public event EventHandler<JournalSyncEventArgs> ShippingLogsFinished;
+
+			public long LastShippedTransactionId
+			{
+				get { return _lastShippedTransactionId; }				
+			}
+
+			public void ShipLogs()
+			{
+				_lastShippedTransactionId = 0;
+				throw new NotImplementedException();			
+			}
+
+			protected void OnShippingLogsFinished(JournalSyncEventArgs e)
+			{
+				var shippingLogsFinished = ShippingLogsFinished;
+				if (shippingLogsFinished != null)
+					shippingLogsFinished(this, e);
+			}
+
+			public void Dispose()
+			{
+				throw new NotImplementedException();
+			}
+		}
+
 		public class JournalApplicator : IDisposable
 		{
 			private const long DelayedDataFileSynchronizationBytesLimit = 2L*1024*1024*1024;
@@ -362,9 +397,16 @@ namespace Voron.Impl.Journal
 			private DateTime _lastDataFileSyncTime;
 			private JournalFile _lastFlushedJournal;
 
+			public event EventHandler<JournalSyncEventArgs> ApplyLogsToDataFileFinished;
+
 			public JournalApplicator(WriteAheadJournal waj)
 			{
 				_waj = waj;
+			}
+
+			public long LastSyncedTransactionId
+			{
+				get { return _lastSyncedTransactionId; }
 			}
 
 			public void ApplyLogsToDataFile(long oldestActiveTransaction, Transaction transaction = null)
@@ -431,7 +473,6 @@ namespace Voron.Impl.Journal
 									"This should never happen. Current journal max tx id: " + currentJournalMaxTransactionId +
 									", previous journal max ix id: " + previousJournalMaxTransactionId +
 									", oldest active transaction: " + oldestActiveTransaction);
-
 
 							lastProcessedJournal = journalFile.Number;
 							pagesToWrite[pagePosition.Key] = pagePosition.Value;
@@ -506,12 +547,21 @@ namespace Voron.Impl.Journal
 						if (txw != null)
 							txw.Commit();
 					}
+
+					OnApplyLogsToDataFileFinished(_lastSyncedTransactionId);
 				}
 				finally
 				{
                     if(locked)
 					    _flushingSemaphore.ExitWriteLock();
 				}
+			}
+
+			protected void OnApplyLogsToDataFileFinished(long oldestTransactionId)
+			{
+				var applyLogsToDataFileFinished = ApplyLogsToDataFileFinished;
+				if (applyLogsToDataFileFinished != null)
+					applyLogsToDataFileFinished(this, new JournalSyncEventArgs(oldestTransactionId));
 			}
 
 			public Dictionary<long, int> writtenPages = new Dictionary<long, int>(); 
@@ -574,13 +624,17 @@ namespace Voron.Impl.Journal
 
 			private void FreeScratchPages(IEnumerable<JournalFile> unusedJournalFiles, Transaction txw)
 			{
-				foreach (var jrnl in _waj._files)
-				{
-                    jrnl.FreeScratchPagesOlderThan(txw, _lastSyncedTransactionId);
-				}
-				foreach (var journalFile in unusedJournalFiles)
+				// we have to free pages of the unused journals before the remaining ones that are still in use
+				// to prevent reading from them by any read transaction (read transactions search journals from the newest
+				// to read the most updated version)
+				foreach (var journalFile in unusedJournalFiles.OrderBy(x => x.Number))
 				{
 					journalFile.FreeScratchPagesOlderThan(txw, _lastSyncedTransactionId);
+				}
+
+				foreach (var jrnl in _waj._files.OrderBy(x => x.Number))
+				{
+					jrnl.FreeScratchPagesOlderThan(txw, _lastSyncedTransactionId);
 				}
 			}
 
