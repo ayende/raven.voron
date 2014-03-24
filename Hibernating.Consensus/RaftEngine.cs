@@ -1,26 +1,20 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Hibernating.Consensus.Messages;
-using Newtonsoft.Json;
-using Voron;
-using Voron.Impl;
-using Voron.Trees;
 
 namespace Hibernating.Consensus
 {
 	public class RaftEngine : IDisposable
 	{
-		private static TextWriter Log = Console.Out;
-        private Dictionary<Type, Action<RaftEngine, string, object>> _handlers = new Dictionary<Type, Action<RaftEngine, string, object>>();
+		private TextWriter Log = Console.Out;
+        private readonly Dictionary<Type, Action<RaftEngine, string, object>> _handlers = new Dictionary<Type, Action<RaftEngine, string, object>>();
 		private readonly Random _rnd = new Random();
 		private readonly int _electionTimeoutMilliseconds;
 		private int? _hungElectionTimeoutMilliseconds;
@@ -47,7 +41,7 @@ namespace Hibernating.Consensus
 			Transport = raftEngineSetup.Transport;
 			Transport.SetSink(_events);
 
-		    _log = new InMemoryRaftLog(); //new VoronRaftLog(raftEngineSetup.Options, this);
+		    _log = new VoronRaftLog(raftEngineSetup.Options, this);
 
 			foreach (var peer in raftEngineSetup.Peers)
 			{

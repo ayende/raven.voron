@@ -231,9 +231,8 @@ namespace Hibernating.Consensus
                                                     ", requested truncation point: " + entry);
             var key = entry.ToSlice();
 
-            var log = Transaction.ReadTree("log");
 
-            using (var it = log.Iterate(Transaction))
+            using (var it = LogsTree.Iterate(Transaction))
             {
                 if (it.Seek(key) == false)
                     return false; // we couldn't find the term/index pair

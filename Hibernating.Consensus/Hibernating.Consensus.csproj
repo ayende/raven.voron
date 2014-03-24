@@ -48,6 +48,7 @@
     <Compile Include="Envelope.cs" />
     <Compile Include="EventsArgs\CommitEntryEventArges.cs" />
     <Compile Include="EventsArgs\LeaderChangedEventArgs.cs" />
+    <Compile Include="InMemoryRaftLog.cs" />
     <Compile Include="InMemoryTransport.cs" />
     <Compile Include="IRaftLog.cs" />
     <Compile Include="ITransport.cs" />
