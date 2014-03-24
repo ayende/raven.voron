@@ -4,6 +4,8 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Linq.Expressions;
+using System.Reflection;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -18,7 +20,7 @@ namespace Hibernating.Consensus
 	public class RaftEngine : IDisposable
 	{
 		private static TextWriter Log = Console.Out;
-
+        private Dictionary<Type, Action<RaftEngine, string, object>> _handlers = new Dictionary<Type, Action<RaftEngine, string, object>>();
 		private readonly Random _rnd = new Random();
 		private readonly int _electionTimeoutMilliseconds;
 		private int? _hungElectionTimeoutMilliseconds;
@@ -154,53 +156,45 @@ namespace Hibernating.Consensus
 
 		private void DispatchEvent(Envelope env)
 		{
-			var appendEntriesRequest = env.Message as AppendEntriesRequest;
-			if (appendEntriesRequest != null)
-			{
-				var resp = Handle(appendEntriesRequest);
-				Transport.Send(env.Source, resp);
-				return;
-			}
-			var appendEntriesResponse = env.Message as AppendEntriesResponse;
-			if (appendEntriesResponse != null)
-			{
-				Handle(appendEntriesResponse);
-				return;
-			}
-			var requestVoteRequest = env.Message as RequestVoteRequest;
-			if (requestVoteRequest != null)
-			{
-				var resp = Handle(requestVoteRequest);
-				Transport.Send(env.Source, resp);
-				return;
-			}
-			var requestVoteResponse = env.Message as RequestVoteResponse;
-			if (requestVoteResponse != null)
-			{
-				Handle(requestVoteResponse);
-				return;
-			}
-			var leaderAppendEvent = env.Message as AppendCommand;
-			if (leaderAppendEvent != null)
-			{
-				Handle(leaderAppendEvent);
-				return;
-			}
-			var addPeerCommand = env.Message as AddPeerCommand;
-			if (addPeerCommand != null)
-			{
-				Handle(addPeerCommand);
-				return;
-			}
-			var remvoePeerCommand = env.Message as RemvoePeerCommand;
-			if (remvoePeerCommand != null)
-			{
-				Handle(remvoePeerCommand);
-				return;
-			}
+            Action<RaftEngine,string, object> handler;
+		    var msgType = env.Message.GetType();
+		    if (_handlers.TryGetValue(msgType, out handler))
+		    {
+		        handler(this, env.Source, env.Message);
+		        return;
+		    }
+		    var method = GetType()
+		        .GetMethod("Handle", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic, null,
+		            new[] {msgType}, null);
 
-			throw new InvalidOperationException("Cannot understand, got " + env.Message.GetType() + " but don't know how to handle that");
+		    if (method == null)
+		        throw new InvalidOperationException("Cannot find a handler method for " + msgType);
+
+		    var self = Expression.Parameter(typeof (RaftEngine), "self");
+		    var src = Expression.Parameter(typeof (string), "src");
+		    var msg = Expression.Parameter(typeof (object), "msg");
+
+		    Expression body = Expression.Call(self, method, new Expression[] {Expression.Convert(msg, msgType)});
+
+		    if (method.ReturnType != typeof (void))
+		    {
+		        var transport = Expression.MakeMemberAccess(self, GetType().GetProperty("Transport"));
+		        var sendMethod = typeof(ITransport).GetMethod("Send", new[]{typeof(string), method.ReturnType});
+                if(sendMethod == null)
+                    throw new InvalidOperationException("Cannot find a send method for " + method.ReturnType);
+                body = Expression.Call(transport, sendMethod,  src, Expression.Convert(body, method.ReturnType));
+		    }
+
+		    handler = Expression.Lambda<Action<RaftEngine, string, object>>(body, self, src, msg).Compile();
+		    _handlers[msgType] = handler;
+		    handler(this, env.Source, env.Message);
 		}
+
+	    public void Handle(ErrorReportEvent error)
+	    {
+            Log.WriteLine(error.Message);
+	        Log.WriteLine(error.Error);
+	    }
 
 		private void Handle(RemvoePeerCommand remvoePeerCommand)
 		{
@@ -245,6 +239,7 @@ namespace Hibernating.Consensus
 				_log.ApplyCommit(entry, OnCommitEntry);
 				return;
 			}
+
 
 		
 

@@ -1,4 +1,5 @@
 ﻿using System.IO;
+using Newtonsoft.Json;
 
 namespace Hibernating.Consensus.Messages
 {
@@ -16,6 +17,8 @@ namespace Hibernating.Consensus.Messages
 	public class AppendEntry
 	{
 		public EntryId Entry { get; set; }
+
+        [JsonIgnore]
 		public Stream Stream { get; set; }
 	}
 }

@@ -9,7 +9,7 @@ namespace Hibernating.Consensus
 {
 	public class InMemoryTransport : ITransport
 	{
-        public static TextWriter Log = TextWriter.Null;
+        public static TextWriter Log = Console.Out;
 		private readonly string _name;
 
 		private readonly Dictionary<string, BlockingCollection<Envelope>> _dests =
