@@ -1,5 +1,7 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Threading;
 using Voron;
@@ -58,6 +60,27 @@ namespace Hibernating.Consensus.Tests
 		{
 			Assert.True(SpinWait.SpinUntil(() => _engines.Any(x => x.State == RaftEngineState.Leader), TimeSpan.FromMilliseconds(2500)));
 			Assert.Equal(1, _engines.Count(x => x.State == RaftEngineState.Leader));
+		}
+
+		[Fact]
+		public void WhenAppendIsOverReplicatedToAllOthers()
+		{
+			Assert.True(SpinWait.SpinUntil(() => _engines.Any(x => x.State == RaftEngineState.Leader), TimeSpan.FromMilliseconds(2500)));
+			var leader = _engines.Single(x=>x.State == RaftEngineState.Leader);
+
+			var list = new ConcurrentBag<byte>();
+
+			foreach (var engine in _engines)
+			{
+				engine.CommitEntry += (sender, args) => list.Add((byte)args.Stream.ReadByte());
+
+			}
+			leader.AppendAsync(new MemoryStream(new[] {(byte) 42})).Wait();
+
+
+			Assert.Equal(3, list.Count);
+			Assert.True(list.All(x=>x==42));
+
 		}
 
 		public void Dispose()
