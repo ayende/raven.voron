@@ -356,7 +356,7 @@ namespace Voron.Impl
 		{
 			if (!Committed && !RolledBack && Flags == TransactionFlags.ReadWrite)
 				Rollback();
-
+			
 			_env.TransactionCompleted(this);
 			foreach (var pagerState in _pagerStates)
 			{

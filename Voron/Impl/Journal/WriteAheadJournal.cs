@@ -7,7 +7,9 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Threading;
 using Voron.Exceptions;
 using Voron.Impl.FileHeaders;
@@ -25,9 +27,13 @@ namespace Voron.Impl.Journal
 		private long _currentJournalFileSize;
 		private DateTime _lastFile;
 
+		public event Action<TransactionToShip> OnTransactionCommit;
+
 		private long _journalIndex = -1;
 		private readonly LZ4 _lz4 = new LZ4();
 		private readonly JournalApplicator _journalApplicator;
+		private readonly JournalShipper _journalShipper;
+		private readonly ReaderWriterLockSlim _journalSyncObj;
 		private readonly ModifyHeaderAction _updateLogInfo;
 
 		private ImmutableAppendOnlyList<JournalFile> _files = ImmutableAppendOnlyList<JournalFile>.Empty;
@@ -51,12 +57,16 @@ namespace Voron.Impl.Journal
 			};
 
 			_compressionPager = _env.Options.CreateScratchPager("compression.buffers");
-			_journalApplicator = new JournalApplicator(this);
+			_journalSyncObj = new ReaderWriterLockSlim();
+			_journalApplicator = new JournalApplicator(this, _journalSyncObj);
+			_journalShipper = new JournalShipper(this, 0, _journalSyncObj);
 		}
 
 		public ImmutableAppendOnlyList<JournalFile> Files { get { return _files; } }
 
 		public JournalApplicator Applicator { get { return _journalApplicator; } }
+
+		public JournalShipper Shipper { get { return _journalShipper; } }
 
 		private JournalFile NextFile(int numberOfPages = 1)
 		{
@@ -355,30 +365,43 @@ namespace Voron.Impl.Journal
 			}
 		}
 
-		public class JournalShipper : IDisposable
+		public class JournalShipper
 		{
-			private long _lastShippedTransactionId;
-			public event EventHandler<JournalSyncEventArgs> ShippingLogsFinished;
+			private readonly ReaderWriterLockSlim _shippingSemaphore;
+			private readonly WriteAheadJournal _waj;
 
-			public long LastShippedTransactionId
+			public JournalShipper(WriteAheadJournal waj, long lastShippedTransactionId, ReaderWriterLockSlim shippingSemaphore = null)
 			{
-				get { return _lastShippedTransactionId; }				
+				_waj = waj;
+				_shippingSemaphore = shippingSemaphore ?? new ReaderWriterLockSlim();
 			}
 
-			public void ShipLogs()
+
+			public IEnumerable<TransactionToShip> ReadJournalForShippings(long lastTransactionId)
 			{
-				_lastShippedTransactionId = 0;
-				throw new NotImplementedException();			
+				bool locked = false;
+				if (_shippingSemaphore.IsReadLockHeld == false)
+				{
+					if (_shippingSemaphore.TryEnterReadLock(Debugger.IsAttached ? TimeSpan.FromMinutes(30) : TimeSpan.FromSeconds(30)) == false)
+						throw new TimeoutException("Could not acquire the read lock in 30 seconds");
+					locked = true;
+				}
+
+				try
+				{
+					var journalReader = new JournalReader(_waj._dataPager, null, lastTransactionId, null);
+					var journalLogs = journalReader.ReadJournalForShipping(_waj._env.Options).ToList();
+
+					return journalLogs;
+				}
+				finally
+				{
+					if(locked)
+						_shippingSemaphore.ExitReadLock();
+				}
 			}
 
-			protected void OnShippingLogsFinished(JournalSyncEventArgs e)
-			{
-				var shippingLogsFinished = ShippingLogsFinished;
-				if (shippingLogsFinished != null)
-					shippingLogsFinished(this, e);
-			}
-
-			public void Dispose()
+			public void OnEmergencyLogsShipped(long lastShippedTransactionId)
 			{
 				throw new NotImplementedException();
 			}
@@ -388,7 +411,7 @@ namespace Voron.Impl.Journal
 		{
 			private const long DelayedDataFileSynchronizationBytesLimit = 2L*1024*1024*1024;
 			private readonly TimeSpan DelayedDataFileSynchronizationTimeLimit = TimeSpan.FromMinutes(1);
-            private readonly ReaderWriterLockSlim _flushingSemaphore = new ReaderWriterLockSlim();
+            private readonly ReaderWriterLockSlim _flushingSemaphore;
 			private readonly Dictionary<long, JournalFile> _journalsToDelete = new Dictionary<long, JournalFile>();
 			private readonly WriteAheadJournal _waj;
 			private long _lastSyncedTransactionId;
@@ -399,9 +422,10 @@ namespace Voron.Impl.Journal
 
 			public event EventHandler<JournalSyncEventArgs> ApplyLogsToDataFileFinished;
 
-			public JournalApplicator(WriteAheadJournal waj)
+			public JournalApplicator(WriteAheadJournal waj, ReaderWriterLockSlim flushingSemaphore = null)
 			{
 				_waj = waj;
+				_flushingSemaphore = flushingSemaphore ?? new ReaderWriterLockSlim();
 			}
 
 			public long LastSyncedTransactionId
@@ -411,86 +435,31 @@ namespace Voron.Impl.Journal
 
 			public void ApplyLogsToDataFile(long oldestActiveTransaction, Transaction transaction = null)
 			{
-                bool locked = false;
-                if (_flushingSemaphore.IsWriteLockHeld == false)
-                {
-                    if (_flushingSemaphore.TryEnterWriteLock(Debugger.IsAttached ? TimeSpan.FromMinutes(30) : TimeSpan.FromSeconds(30)) == false)
-                        throw new TimeoutException("Could not acquire the write lock in 30 seconds");
-                    locked = true;
-                }
+				bool locked = false;
+				if (_flushingSemaphore.IsWriteLockHeld == false)
+				{
+					if (_flushingSemaphore.TryEnterWriteLock(Debugger.IsAttached ? TimeSpan.FromMinutes(30) : TimeSpan.FromSeconds(30)) == false)
+						throw new TimeoutException("Could not acquire the write lock in 30 seconds");
+					locked = true;
+				}
 
 				try
 				{
 					var alreadyInWriteTx = transaction != null && transaction.Flags == TransactionFlags.ReadWrite;
 
-					var jrnls = _waj._files.Select(x => x.GetSnapshot()).OrderBy(x => x.Number).ToList();
-					if (jrnls.Count == 0)
+					var journalSnapshots = _waj.Files.Select(x => x.GetSnapshot())
+										   .OrderBy(x => x.Number)
+										   .ToList();
+
+					if (journalSnapshots.Count == 0)
 						return; // nothing to do
 
-					Debug.Assert(jrnls.First().Number >= _lastSyncedJournal);
+					Debug.Assert(journalSnapshots.First().Number >= _lastSyncedJournal);
 
-					var pagesToWrite = new Dictionary<long, JournalFile.PagePosition>();
-
-					long lastProcessedJournal = -1;
-					long previousJournalMaxTransactionId = -1;
-
-					long lastFlushedTransactionId = -1;
-
-					foreach (var journalFile in jrnls.Where(x => x.Number >= _lastSyncedJournal))
-					{
-						var currentJournalMaxTransactionId = -1L;
-
-						foreach (var pagePosition in journalFile.PageTranslationTable.IterateLatestAsOf(journalFile.LastTransaction))
-						{
-							if (oldestActiveTransaction != 0 &&
-								pagePosition.Value.TransactionId >= oldestActiveTransaction)
-							{
-								// we cannot write this yet, there is a read transaction that might be looking at this
-								// however, we _aren't_ going to be writing this to the data file, since that would be a 
-								// waste, we would just overwrite that value in the next flush anyway
-								JournalFile.PagePosition existingPagePosition;
-								if (pagesToWrite.TryGetValue(pagePosition.Key, out existingPagePosition) &&
-								    pagePosition.Value.JournalNumber == existingPagePosition.JournalNumber) 
-								{
-									// remove the page only when it comes from the same journal
-									// otherwise we can damage the journal's page translation table (PTT)
-									// because the existing overwrite in a next journal can be filtered out
-									// so we wouldn't write any page to the data file
-									pagesToWrite.Remove(pagePosition.Key);
-								}
-
-								continue;
-							}
-
-							if (journalFile.Number == _lastSyncedJournal && pagePosition.Value.TransactionId <= _lastSyncedTransactionId)
-								continue;
-
-							currentJournalMaxTransactionId = Math.Max(currentJournalMaxTransactionId, pagePosition.Value.TransactionId);
-
-							if (currentJournalMaxTransactionId < previousJournalMaxTransactionId)
-								throw new InvalidOperationException(
-									"Journal applicator read beyond the oldest active transaction in the next journal file. " +
-									"This should never happen. Current journal max tx id: " + currentJournalMaxTransactionId +
-									", previous journal max ix id: " + previousJournalMaxTransactionId +
-									", oldest active transaction: " + oldestActiveTransaction);
-
-							lastProcessedJournal = journalFile.Number;
-							pagesToWrite[pagePosition.Key] = pagePosition.Value;
-
-							lastFlushedTransactionId = currentJournalMaxTransactionId;
-						}
-
-						if (currentJournalMaxTransactionId == -1L)
-							continue;
-
-						previousJournalMaxTransactionId = currentJournalMaxTransactionId;
-					}
+					var pagesToWrite = GetPagesFromJournals(oldestActiveTransaction, journalSnapshots);
 
 					if (pagesToWrite.Count == 0)
 						return;
-
-					_lastSyncedJournal = lastProcessedJournal;
-					_lastSyncedTransactionId = lastFlushedTransactionId;
 
 					try
 					{
@@ -502,59 +471,171 @@ namespace Voron.Impl.Journal
 						return;
 					}
 
-					var unusedJournals = GetUnusedJournalFiles(jrnls);
-
-					foreach (var unused in unusedJournals.Where(unused => !_journalsToDelete.ContainsKey(unused.Number)))
-					{
-						_journalsToDelete.Add(unused.Number, unused);
-					}
+					var unusedJournals = GetAlreadyHandledJournalFiles(journalSnapshots);
 
 					using (var txw = alreadyInWriteTx ? null : _waj._env.NewTransaction(TransactionFlags.ReadWrite))
 					{
-						_lastFlushedJournal = _waj._files.First(x => x.Number == _lastSyncedJournal);
+						_lastFlushedJournal = _waj.Files.First(x => x.Number == _lastSyncedJournal);
 
-						if (unusedJournals.Count > 0)
-						{
-							var lastUnusedJournalNumber = unusedJournals.Last().Number;
-							_waj._files = _waj._files.RemoveWhile(x => x.Number <= lastUnusedJournalNumber, new List<JournalFile>());
-						}
+						RemoveUnusedJournalsIfNeeded(unusedJournals);
 
 						if (_waj._files.Count == 0)
 							_waj.CurrentFile = null;
-						
+
 						FreeScratchPages(unusedJournals, txw);
 
+						var hasSynced = false;
 						if (_totalWrittenButUnsyncedBytes > DelayedDataFileSynchronizationBytesLimit ||
 							DateTime.Now - _lastDataFileSyncTime > DelayedDataFileSynchronizationTimeLimit)
 						{
-							_waj._dataPager.Sync();
-
-							UpdateFileHeaderAfterDataFileSync(_lastFlushedJournal, oldestActiveTransaction);
-
-							foreach (var toDelete in _journalsToDelete.Values)
-							{
-								if (_waj._env.Options.IncrementalBackupEnabled == false)
-									toDelete.DeleteOnClose = true;
-
-								toDelete.Release();
-							}
-
-							_journalsToDelete.Clear();
-							_totalWrittenButUnsyncedBytes = 0;
-							_lastDataFileSyncTime = DateTime.Now;
+							SyncDataFileWrites(oldestActiveTransaction);
+							hasSynced = true;
 						}
 
 						if (txw != null)
 							txw.Commit();
-					}
 
-					OnApplyLogsToDataFileFinished(_lastSyncedTransactionId);
+						if (hasSynced)
+							OnApplyLogsToDataFileFinished(_lastSyncedTransactionId);
+					}
 				}
 				finally
 				{
-                    if(locked)
-					    _flushingSemaphore.ExitWriteLock();
+					if (locked)
+						_flushingSemaphore.ExitWriteLock();
 				}
+			}
+
+			private void SyncDataFileWrites(long oldestActiveTransaction)
+			{
+				_waj._dataPager.Sync();
+
+				UpdateFileHeaderAfterDataFileSync(_lastFlushedJournal, oldestActiveTransaction);
+
+				foreach (var toDelete in _journalsToDelete.Values)
+				{
+					if (_waj._env.Options.IncrementalBackupEnabled == false)
+						toDelete.DeleteOnClose = true;
+
+					toDelete.Release();
+				}
+
+				_journalsToDelete.Clear();
+				_totalWrittenButUnsyncedBytes = 0;
+				_lastDataFileSyncTime = DateTime.Now;
+			}
+
+			[MethodImpl(MethodImplOptions.AggressiveInlining)]
+			private void RemoveUnusedJournalsIfNeeded(IReadOnlyCollection<JournalFile> unusedJournals)
+			{
+				if (unusedJournals.Any())
+				{
+					var lastUnusedJournalNumber = unusedJournals.Last().Number;
+					_waj._files = _waj._files.RemoveWhile(x => x.Number <= lastUnusedJournalNumber, new List<JournalFile>());
+				}
+			}
+
+
+			protected IReadOnlyList<JournalFile> GetAlreadyHandledJournalFiles(IEnumerable<JournalSnapshot> journalSnapshots)
+			{
+				var unusedJournalFiles = new List<JournalFile>();
+				foreach (var j in journalSnapshots)
+				{
+					if (j.Number > _lastSyncedJournal) // after the last log we handled, nothing to do here
+						continue;
+					if (j.Number == _lastSyncedJournal) // we are in the last log we handled
+					{
+						if (j.AvailablePages != 0 || //　if there are more pages to be used here or 
+						j.PageTranslationTable.MaxTransactionId() != _lastSyncedTransactionId) // we didn't handle the whole journal
+							continue; // do not mark it as handled
+					}
+					unusedJournalFiles.Add(_waj.Files.First(x => x.Number == j.Number));
+				}
+				return unusedJournalFiles;
+			}
+
+			protected Dictionary<long, JournalFile.PagePosition> GetPagesFromJournals(long oldestActiveTransaction, IEnumerable<JournalSnapshot> journalSnapshots)
+			{
+				var pagesToWrite = new Dictionary<long, JournalFile.PagePosition>();
+
+				long lastProcessedJournal = -1;
+				long previousJournalMaxTransactionId = -1;
+				long lastFlushedTransactionId = -1;
+
+				foreach (var journalFile in journalSnapshots.Where(x => x.Number >= _lastSyncedJournal))
+				{
+					var currentJournalMaxTransactionId = -1L;
+
+					foreach (var pagePosition in journalFile.PageTranslationTable.IterateLatestAsOf(journalFile.LastTransaction))
+					{
+						if (ShouldSkipFetchingPagePosition(oldestActiveTransaction, pagePosition, pagesToWrite))
+							continue;
+
+						var isAlreadyHandled = journalFile.Number == _lastSyncedJournal &&
+													pagePosition.Value.TransactionId <= _lastSyncedTransactionId;
+						if (isAlreadyHandled)
+							continue;
+
+						currentJournalMaxTransactionId = GetAndValidateOldestTransactionId(currentJournalMaxTransactionId,
+																						   oldestActiveTransaction,
+																						   pagePosition,
+																						   previousJournalMaxTransactionId);
+
+						lastProcessedJournal = journalFile.Number;
+						pagesToWrite[pagePosition.Key] = pagePosition.Value;
+
+						lastFlushedTransactionId = currentJournalMaxTransactionId;
+					}
+
+					if (currentJournalMaxTransactionId == -1L)
+						continue;
+
+					previousJournalMaxTransactionId = currentJournalMaxTransactionId;
+				}
+
+				_lastSyncedJournal = lastProcessedJournal;
+				_lastSyncedTransactionId = lastFlushedTransactionId;
+
+				return pagesToWrite;
+			}
+
+			private static long GetAndValidateOldestTransactionId(long currentJournalMaxTransactionId, long oldestActiveTransaction,
+				KeyValuePair<long, JournalFile.PagePosition> pagePosition, long previousJournalMaxTransactionId)
+			{
+				currentJournalMaxTransactionId = Math.Max(currentJournalMaxTransactionId, pagePosition.Value.TransactionId);
+
+				if (currentJournalMaxTransactionId < previousJournalMaxTransactionId)
+					throw new InvalidOperationException(
+						"Journal applicator read beyond the oldest active transaction in the next journal file. " +
+						"This should never happen. Current journal max tx id: " + currentJournalMaxTransactionId +
+						", previous journal max ix id: " + previousJournalMaxTransactionId +
+						", oldest active transaction: " + oldestActiveTransaction);
+				return currentJournalMaxTransactionId;
+			}
+
+			protected static bool ShouldSkipFetchingPagePosition(long oldestActiveTransaction, KeyValuePair<long, JournalFile.PagePosition> pagePosition,
+							Dictionary<long, JournalFile.PagePosition> pagesToWrite)
+			{
+				if (oldestActiveTransaction != 0 &&
+					pagePosition.Value.TransactionId >= oldestActiveTransaction)
+				{
+					// we cannot write this yet, there is a read transaction that might be looking at this
+					// however, we _aren't_ going to be writing this to the data file, since that would be a 
+					// waste, we would just overwrite that value in the next flush anyway
+					JournalFile.PagePosition existingPagePosition;
+					if (pagesToWrite.TryGetValue(pagePosition.Key, out existingPagePosition) &&
+						pagePosition.Value.JournalNumber == existingPagePosition.JournalNumber)
+					{
+						// remove the page only when it comes from the same journal
+						// otherwise we can damage the journal's page translation table (PTT)
+						// because the existing overwrite in a next journal can be filtered out
+						// so we wouldn't write any page to the data file
+						pagesToWrite.Remove(pagePosition.Key);
+					}
+
+					return true;
+				}
+				return false;
 			}
 
 			protected void OnApplyLogsToDataFileFinished(long oldestTransactionId)
@@ -575,8 +656,8 @@ namespace Voron.Impl.Journal
 				try
 				{
 					var sortedPages = pagesToWrite.OrderBy(x => x.Key)
-													.Select(x => scratchBufferPool.ReadPage(x.Value.ScratchPos, scratchPagerState))
-													.ToList();
+												  .Select(x => scratchBufferPool.ReadPage(x.Value.ScratchPos, scratchPagerState))
+											      .ToList();
 
 					var last = sortedPages.Last();
 
@@ -636,24 +717,6 @@ namespace Voron.Impl.Journal
 				{
 					jrnl.FreeScratchPagesOlderThan(txw, _lastSyncedTransactionId);
 				}
-			}
-
-			private List<JournalFile> GetUnusedJournalFiles(List<JournalSnapshot> jrnls)
-			{
-				var unusedJournalFiles = new List<JournalFile>();
-				foreach (var j in jrnls)
-				{
-					if (j.Number > _lastSyncedJournal) // after the last log we synced, nothing to do here
-						continue;
-					if (j.Number == _lastSyncedJournal) // we are in the last log we synced
-					{
-						if (j.AvailablePages != 0 || //　if there are more pages to be used here or 
-						j.PageTranslationTable.MaxTransactionId() != _lastSyncedTransactionId) // we didn't synchronize whole journal
-							continue; // do not mark it as unused
-					}
-					unusedJournalFiles.Add(_waj._files.First(x => x.Number == j.Number));
-				}
-				return unusedJournalFiles;
 			}
 
 			public void UpdateFileHeaderAfterDataFileSync(JournalFile file, long oldestActiveTransaction)
@@ -724,14 +787,18 @@ namespace Voron.Impl.Journal
 		    {
 		        CurrentFile = NextFile(pages.Length);
 		    }
-		    CurrentFile.Write(tx, pages);
+			var onTransactionCommit = OnTransactionCommit;
+			if (onTransactionCommit != null)
+			{
+				UnmanagedVectorMemoryStream unmanagedVectorMemoryStream = new UnmanagedVectorMemoryStream(pages, 1, AbstractPager.PageSize);
+				onTransactionCommit(tx.Id, unmanagedVectorMemoryStream);
+			}
+			CurrentFile.Write(tx, pages);
 		    if (CurrentFile.AvailablePages == 0)
 		    {
 		        CurrentFile = null;
 		    }
-
 		}
-
 
 		private byte*[] CompressPages(Transaction tx, int numberOfPages, IVirtualPager compressionPager)
 		{
@@ -759,19 +826,19 @@ namespace Voron.Impl.Journal
 				write += count;
 			}
 
-			var len = DoCompression(tempBuffer, compressionBuffer, sizeInBytes, outputBuffer);
-			var compressedPages = (len / AbstractPager.PageSize) + (len % AbstractPager.PageSize == 0 ? 0 : 1);
+			var sizeAfterCompression = DoCompression(tempBuffer, compressionBuffer, sizeInBytes, outputBuffer);
 
-			var pages = new byte*[compressedPages + 1];
-
+			var compressedPages = (sizeAfterCompression / AbstractPager.PageSize) + (sizeAfterCompression % AbstractPager.PageSize == 0 ? 0 : 1);
 			var txHeaderBase = tx.Environment.ScratchBufferPool.AcquirePagePointer(txPages[0].PositionInScratchBuffer);
 			var txHeader = (TransactionHeader*)txHeaderBase;
 
 			txHeader->Compressed = true;
-			txHeader->CompressedSize = len;
+			txHeader->CompressedSize = sizeAfterCompression;
 			txHeader->UncompressedSize = sizeInBytes;
 
+			var pages = new byte*[compressedPages + 1];
 			pages[0] = txHeaderBase;
+
 			for (int index = 0; index < compressedPages; index++)
 			{
 				pages[index + 1] = compressionBuffer + (index * AbstractPager.PageSize);
@@ -793,5 +860,122 @@ namespace Voron.Impl.Journal
 
 			return doCompression;
 		}
+	}
+
+	public unsafe class UnmanagedVectorMemoryStream : Stream
+	{
+		private readonly byte*[] _pages;
+		private readonly int _start;
+		private readonly int _pageSize;
+		
+		public UnmanagedVectorMemoryStream(byte*[] pages, int start, int pageSize)
+		{
+			_pages = pages;
+			_start = start;
+			_pageSize = pageSize;
+			_length = _pageSize*(_pages.Length - start);
+		}
+
+		public override void Flush()
+		{
+			throw new NotSupportedException();
+		}
+
+		public override long Seek(long offset, SeekOrigin origin)
+		{
+			switch (origin)
+			{
+					case SeekOrigin.Current:
+						if (Position + offset > Length)
+							throw new ArgumentOutOfRangeException("offset");
+						Position += offset;
+						break;
+					case SeekOrigin.Begin:
+						if(offset > Length)
+							throw new ArgumentOutOfRangeException("offset");
+						Position = offset;
+						break;
+					case SeekOrigin.End:
+						if(offset > Length)
+							throw new ArgumentOutOfRangeException("offset");
+						Position = Length - offset;
+						break;
+			}
+
+			return Position;
+		}
+
+		public override void SetLength(long value)
+		{
+			throw new NotSupportedException();
+		}
+
+		public override int Read(byte[] buffer, int offset, int count)
+		{
+			fixed (byte* pb = buffer)
+			{
+				count = Math.Min(count, (int) (Length - Position));
+				if (count == 0)
+					return 0;
+
+				var pageSpan = count / _pageSize;
+				if (count%_pageSize > 0) //consider in page span also partial pages
+					pageSpan++;
+
+				var startPage = Position / _pageSize;
+				var positionInStartPage = (int) (Position%_pageSize);
+
+				var endPage = startPage + pageSpan - 1;
+
+				Debug.Assert(endPage >= startPage);
+
+				var read = Math.Min(count, _pageSize - positionInStartPage);
+				NativeMethods.memcpy(pb, _pages[startPage + _start] + positionInStartPage, read);
+
+				count -= read;
+
+				for (var pageIndex = startPage + 1; pageIndex < endPage; pageIndex++)
+				{
+					NativeMethods.memcpy(pb + read, _pages[pageIndex + _start], _pageSize);
+					read += _pageSize;
+					count -= _pageSize;
+				}
+
+				NativeMethods.memcpy(pb + read, _pages[endPage + _start], count);
+
+				read += count;
+
+				return read;
+			}
+		}
+
+		public override void Write(byte[] buffer, int offset, int count)
+		{
+			throw new NotSupportedException();
+		}
+
+		public override bool CanRead
+		{
+			get { return true; }
+		}
+
+		public override bool CanSeek
+		{
+			get { return true; }
+		}
+
+		public override bool CanWrite
+		{
+			get { return false; }
+		}
+
+
+		private readonly long _length;
+		public override long Length
+		{
+			get { return _length; }
+		}
+
+		public override long Position { get; set; }
 	}
 }
