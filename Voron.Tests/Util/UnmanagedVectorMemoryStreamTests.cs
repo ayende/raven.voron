@@ -47,7 +47,7 @@ namespace Voron.Tests.Util
 				NativeMethods.memcpy(dataBuffer + dummySize - offset, data[1], dummySize);
 				NativeMethods.memcpy(dataBuffer + (dummySize * 2) - offset, data[2], dummySize);
 				
-				using (var stream = new UnmanagedVectorMemoryStream(data, dummySize))
+				using (var stream = new UnmanagedVectorMemoryStream(data, 0,dummySize))
 				{
 					var readData = new byte[(dummySize * 3) - offset];
 					stream.Seek(offset, SeekOrigin.Begin);
@@ -99,7 +99,7 @@ namespace Voron.Tests.Util
 					NativeMethods.memcpy(dataBuffer + dummySize, data[1], dummySize);
 					NativeMethods.memcpy(dataBuffer + (dummySize*2), data[2], dummySize);
 
-					using (var stream = new UnmanagedVectorMemoryStream(data, dummySize))
+					using (var stream = new UnmanagedVectorMemoryStream(data,0, dummySize))
 					{
 						var readData = new byte[dummySize*3];
 						stream.Read(readData, 0, dummySize*3);
@@ -138,7 +138,7 @@ namespace Voron.Tests.Util
 			var data = new byte*[1];
 			data[0] = (byte*) objPtr;
 
-			using (var stream = new UnmanagedVectorMemoryStream(data, dummySize))
+			using (var stream = new UnmanagedVectorMemoryStream(data,0, dummySize))
 			{
 				var readData = new byte[dummySize];
 				stream.Read(readData, 0, dummySize);
@@ -157,7 +157,7 @@ namespace Voron.Tests.Util
 			var data = new byte*[1];
 			data[0] = (byte*)objPtr;
 			var offset = dummySize / 3;
-			using (var stream = new UnmanagedVectorMemoryStream(data, dummySize))
+			using (var stream = new UnmanagedVectorMemoryStream(data,0, dummySize))
 			{
 				stream.Seek(offset, SeekOrigin.Begin);
 				var readData = new byte[dummySize];

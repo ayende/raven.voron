@@ -59,7 +59,8 @@ namespace Voron.Impl.Journal
 			_compressionPager = _env.Options.CreateScratchPager("compression.buffers");
 			_journalSyncObj = new ReaderWriterLockSlim();
 			_journalApplicator = new JournalApplicator(this, _journalSyncObj);
-			_journalShipper = new JournalShipper(this, 0, _journalSyncObj);
+			_journalShipper = new JournalShipper(this, _journalSyncObj);
+			_previousShippedTransactionCrc = 0;
 		}
 
 		public ImmutableAppendOnlyList<JournalFile> Files { get { return _files; } }
@@ -300,6 +301,7 @@ namespace Voron.Impl.Journal
 		}
 
 		private bool disposed;
+		private uint _previousShippedTransactionCrc;
 
 		public void Dispose()
 		{
@@ -370,7 +372,7 @@ namespace Voron.Impl.Journal
 			private readonly ReaderWriterLockSlim _shippingSemaphore;
 			private readonly WriteAheadJournal _waj;
 
-			public JournalShipper(WriteAheadJournal waj, long lastShippedTransactionId, ReaderWriterLockSlim shippingSemaphore = null)
+			public JournalShipper(WriteAheadJournal waj, ReaderWriterLockSlim shippingSemaphore = null)
 			{
 				_waj = waj;
 				_shippingSemaphore = shippingSemaphore ?? new ReaderWriterLockSlim();
@@ -389,10 +391,25 @@ namespace Voron.Impl.Journal
 
 				try
 				{
-					var journalReader = new JournalReader(_waj._dataPager, null, lastTransactionId, null);
-					var journalLogs = journalReader.ReadJournalForShipping(_waj._env.Options).ToList();
+					var logInfo = _waj._headerAccessor.Get(ptr => ptr->Journal);
+					var transactionsToShip = new List<TransactionToShip>();
 
-					return journalLogs;
+					for (int journalNumber = 0; journalNumber < logInfo.JournalFilesCount; journalNumber++)
+					{
+						var journalReader = new JournalReader(_waj._env.Options.OpenJournalPager(journalNumber), null, lastTransactionId, null);
+						var journalLogs = journalReader.ReadJournalForShipping(_waj._env.Options).ToList();
+
+						if (journalLogs.Count > 0)
+						{
+							_waj._previousShippedTransactionCrc = journalLogs.Last().Header.Crc;
+							transactionsToShip.AddRange(journalLogs);
+						}
+					}
+
+					if(transactionsToShip.Count > 0)
+						_waj._headerAccessor.Modify(header => header->LastShippedTransactionId = transactionsToShip.Last().Header.TransactionId);
+
+					return transactionsToShip;
 				}
 				finally
 				{
@@ -790,8 +807,17 @@ namespace Voron.Impl.Journal
 			var onTransactionCommit = OnTransactionCommit;
 			if (onTransactionCommit != null)
 			{
-				UnmanagedVectorMemoryStream unmanagedVectorMemoryStream = new UnmanagedVectorMemoryStream(pages, 1, AbstractPager.PageSize);
-				onTransactionCommit(tx.Id, unmanagedVectorMemoryStream);
+				var stream = new UnmanagedVectorMemoryStream(pages, 1, AbstractPager.PageSize);
+				var transactionHeaderPtr = (TransactionHeader*)pages[0];
+
+				var transactionToShip = new TransactionToShip(*transactionHeaderPtr)
+				{					
+					CompressedData = stream,
+					PreviousTransactionCrc = _previousShippedTransactionCrc
+				};
+				_headerAccessor.Modify(header => header->LastShippedTransactionId = transactionHeaderPtr->TransactionId);
+				_previousShippedTransactionCrc = transactionHeaderPtr->Crc;
+				onTransactionCommit(transactionToShip);
 			}
 			CurrentFile.Write(tx, pages);
 		    if (CurrentFile.AvailablePages == 0)

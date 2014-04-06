@@ -6,7 +6,7 @@ namespace Voron.Impl.Journal
 	{
 		public TransactionHeader Header { get; private set; }
 
-		public int  PreviousTransactionCrc { get; set; }
+		public uint PreviousTransactionCrc { get; set; }
 
 		public Stream CompressedData { get; set; }
 

@@ -16,6 +16,8 @@ namespace Voron.Impl.Journal
 		private readonly long _lastSyncedTransactionId;
 		private long _readingPage;
 
+		private uint _previousTransactionCrc;
+
 		private readonly Dictionary<long, JournalFile.PagePosition> _transactionPageTranslation = new Dictionary<long, JournalFile.PagePosition>();
 		private int _recoveryPage;
 
@@ -37,6 +39,7 @@ namespace Voron.Impl.Journal
 			_readingPage = 0;
 			_recoveryPage = 0;
 			LastTransactionHeader = previous;
+			_previousTransactionCrc = 0;
 		}
 
 		public TransactionHeader* LastTransactionHeader { get; private set; }
@@ -59,10 +62,17 @@ namespace Voron.Impl.Journal
 			if (!ValidatePagesCrc(options, compressedPageCount, current))
 				return false;
 
-			transactionToShipRecord = new TransactionToShip(*current) { CompressedData = new byte[current->CompressedSize] };
-
-			fixed (byte* compressedDataPtr = transactionToShipRecord.CompressedData)
+			var compressedPagesRaw = new byte[current->CompressedSize];
+			fixed (byte* compressedDataPtr = compressedPagesRaw)
 				NativeMethods.memcpy(compressedDataPtr, _pager.AcquirePagePointer(_readingPage), current->CompressedSize);
+
+			transactionToShipRecord = new TransactionToShip(*current)
+			{
+				CompressedData = new MemoryStream(compressedPagesRaw),
+				PreviousTransactionCrc = _previousTransactionCrc
+			};
+
+			_previousTransactionCrc = current->Crc;
 
 			_readingPage += compressedPageCount;
 			return true;
