@@ -401,9 +401,6 @@ namespace Voron.Impl.Journal
 							transactionsToShip.AddRange(journalLogs);
 					}
 
-					if(transactionsToShip.Count > 0)
-						_waj._headerAccessor.Modify(header => header->LastShippedTransactionId = transactionsToShip.OrderBy(x => x.Header.TransactionId).Last().Header.TransactionId);
-
 					return transactionsToShip;
 				}
 				finally
@@ -570,10 +567,7 @@ namespace Voron.Impl.Journal
 			private void RemoveUnusedJournalsIfNeeded(IReadOnlyCollection<JournalFile> unusedJournals)
 			{
 				if (unusedJournals.Any())
-				{
-					var lastUnusedJournalNumber = unusedJournals.Last().Number;
-					_waj._files = _waj._files.RemoveWhile(x => x.Number <= lastUnusedJournalNumber, new List<JournalFile>());
-				}
+					_waj._files = _waj._files.RemoveWhile(x => x.Number <= unusedJournals.Last().Number, new List<JournalFile>());
 			}
 
 
@@ -834,13 +828,13 @@ namespace Voron.Impl.Journal
 			var transactionHeader = *(TransactionHeader*)pages[0];
 
 			var writePage = CurrentFile.Write(tx, pages);
-
+			
 			var onTransactionCommit =  OnTransactionCommit;
 			if (onTransactionCommit != null)
 			{
 				var bufferSize = pages.Length * AbstractPager.PageSize;
 				var buffer = new byte[bufferSize];
-
+				
 				fixed (byte* bp = buffer)
 					CurrentFile.JournalWriter.Read(writePage, bp, bufferSize);
 				
@@ -852,8 +846,6 @@ namespace Voron.Impl.Journal
 				};
 
 				_previousTransactionCrc = transactionHeader.Crc;
-
-				_headerAccessor.Modify(header => header->LastShippedTransactionId = transactionToShip.Header.TransactionId);
 				onTransactionCommit(transactionToShip);
 			}
 

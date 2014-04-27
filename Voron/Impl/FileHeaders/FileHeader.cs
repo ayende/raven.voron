@@ -60,11 +60,5 @@ namespace Voron.Impl.FileHeaders
 		/// </summary>
 	    [FieldOffset(188)] 
 		public IncrementalBackupInfo IncrementalBackup;
-
-		/// <summary>
-		/// Id of last shipped transaction
-		/// </summary>
-	    [FieldOffset(196)] 
-		public long LastShippedTransactionId;
     }
 }

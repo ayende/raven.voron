@@ -107,9 +107,13 @@ namespace Voron.Util
 
 		public long MaxTransactionId()
 		{
-			return _values.Values.Select(x => x[x.Count - 1].Value)
-				.Where(x => x != null)
-				.Max(x => x.TransactionId);
+			var transactionIds = _values.Values.Select(x => x[x.Count - 1].Value)
+											   .Where(x => x != null)
+											   .ToList();
+			if(transactionIds.Any())
+				return transactionIds.Max(x => x.TransactionId);
+
+			return -1;
 		}
 
 		public List<KeyValuePair<long, JournalFile.PagePosition>> AllPagesOlderThan(long oldestActiveTransaction)
@@ -120,7 +124,6 @@ namespace Voron.Util
 				return val.Value.TransactionId < oldestActiveTransaction;
 			}).Select(x => new KeyValuePair<long, JournalFile.PagePosition>(x.Key, x.Value[x.Value.Count - 1].Value))
 				.ToList();
-
 		}
 
 		public void SetItemsNoTransaction(Dictionary<long, JournalFile.PagePosition> ptt)
