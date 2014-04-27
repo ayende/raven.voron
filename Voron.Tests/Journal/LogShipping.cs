@@ -1,10 +1,13 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
-using System.Threading.Tasks;
+using Voron.Debugging;
 using Voron.Impl;
 using Voron.Impl.Journal;
+using Voron.Impl.Paging;
+using Voron.Util;
 using Xunit;
 
 namespace Voron.Tests.Journal
@@ -17,7 +20,7 @@ namespace Voron.Tests.Journal
 		}
 
 		[Fact]
-		public void Committing_tx_should_fire_event_with_transactionsToShip_records()
+		public unsafe void Committing_tx_should_fire_event_with_transactionsToShip_records()
 		{
 			var transactionsToShip = new List<TransactionToShip>();
 			Env.Journal.OnTransactionCommit += transactionsToShip.Add;
@@ -25,35 +28,168 @@ namespace Voron.Tests.Journal
 			WriteTestDataToEnv();
 
 			Assert.Equal(3,transactionsToShip.Count);
-			Assert.Equal((uint)0, transactionsToShip[0].PreviousTransactionCrc);
-			Assert.Equal(transactionsToShip[0].Header.Crc, transactionsToShip[1].PreviousTransactionCrc);
-			Assert.Equal(transactionsToShip[1].Header.Crc, transactionsToShip[2].PreviousTransactionCrc);
+			
+			//validate crc
+			foreach (var tx in transactionsToShip)
+			{
+				var compressedDataBuffer = ReadFromTransactionToShip(tx);
+				fixed (byte* compressedDataBufferPtr = compressedDataBuffer)
+				{
+					var crc = Crc.Value(compressedDataBufferPtr, 0, compressedDataBuffer.Length);
+					Assert.Equal(tx.Header.Crc, crc);
+				}
+			}
 		}
 
 		[Fact]
 		public void StorageEnvironment_should_be_able_to_accept_transactionsToShip()
 		{
-			var transactionsToShip = new List<TransactionToShip>();
+			var transactionsToShip = new ConcurrentBag<TransactionToShip>();
 			Env.Journal.OnTransactionCommit += transactionsToShip.Add;
-
+			
 			WriteTestDataToEnv();
+			using (var snapshot = Env.CreateSnapshot())
+				DebugStuff.RenderAndShow(snapshot.Transaction, snapshot.Transaction.State.Root.State.RootPageNumber, 1);
 
 			using (var shippingDestinationEnv = new StorageEnvironment(StorageEnvironmentOptions.CreateMemoryOnly()))
 			{
+				shippingDestinationEnv.Journal.Shipper.ApplyShippedLogs(transactionsToShip);
+				using (var snapshot = shippingDestinationEnv.CreateSnapshot())
+				{
+					DebugStuff.RenderAndShow(snapshot.Transaction, snapshot.Transaction.State.Root.State.RootPageNumber, 1);
+					
+					var fooReadResult = snapshot.Read("TestTree", "foo");
+					Assert.NotNull(fooReadResult);
+
+					var fooValue = Encoding.UTF8.GetString(fooReadResult.Reader.AsStream().ReadData());
+					Assert.Equal("bar", fooValue);
+
+					var barReadResult = snapshot.Read("TestTree", "bar");
+					Assert.NotNull(barReadResult);
+
+					var barValue = Encoding.UTF8.GetString(barReadResult.Reader.AsStream().ReadData());
+					Assert.Equal("foo", barValue);
+				}
+			}
+		}
+
+		[Fact]
+		public void StorageEnvironment_should_be_able_to_accept_transactionsToShip_with_LOTS_of_transactions()
+		{
+			var transactionsToShip = new ConcurrentBag<TransactionToShip>();
+			Env.Journal.OnTransactionCommit += transactionsToShip.Add;
+
+			using (var tx = Env.NewTransaction(TransactionFlags.ReadWrite))
+			{
+				Env.CreateTree(tx, "TestTree");
+				Env.CreateTree(tx, "TestTree2");
+				tx.Commit();
+			}
+
+			WriteLotsOfTestDataForTree("TestTree");
+			WriteLotsOfTestDataForTree("TestTree2");
+
+			using (var shippingDestinationEnv = new StorageEnvironment(StorageEnvironmentOptions.CreateMemoryOnly()))
+			{
+				Assert.DoesNotThrow(() => shippingDestinationEnv.Journal.Shipper.ApplyShippedLogs(transactionsToShip));
 				
+				using (var snapshot = shippingDestinationEnv.CreateSnapshot())
+				{
+					ValidateLotsOfTestDataForTree(snapshot, "TestTree");
+					ValidateLotsOfTestDataForTree(snapshot, "TestTree2");
+				}
+			}
+		}
+
+		private void ValidateLotsOfTestDataForTree(SnapshotReader snapshot, string treeName)
+		{
+			for (int i = 0; i < 1000; i++)
+			{
+				for (int j = 0; j < 1000; j++)
+				{
+					var index = (i + "/ " + j);
+					var key = "key/" + index;
+					var expectedValue = "value/" + index;
+					var result = snapshot.Read(treeName, key);
+
+					Assert.NotNull(result);
+					var fetchedValue = Encoding.UTF8.GetString(result.Reader.AsStream().ReadData());
+
+					Assert.Equal(expectedValue, fetchedValue);
+				}
+			}			
+		}
+
+		private void WriteLotsOfTestDataForTree(string treeName)
+		{
+			for (int i = 0; i < 1000; i++)
+			{
+				using (var writeBatch = new WriteBatch())
+				{
+					for (int j = 0; j < 1000; j++)
+					{
+						var index = (i + "/ " + j);
+						writeBatch.Add("key/" + index, StreamFor("value/" + index), treeName);
+					}
+
+					Env.Writer.Write(writeBatch);
+				}
 			}
 		}
 
 		[Fact]
 		public void Committed_tx_should_be_possible_to_read_from_journal_as_shipping_records()
 		{
+			var transactionsToShipFromCommits = new ConcurrentBag<TransactionToShip>();
+			Env.Journal.OnTransactionCommit += transactionsToShipFromCommits.Add;
+
 			WriteTestDataToEnv();
+
+			//will read 4 transactions --> 
+			//the 3 that were written in WriteTestDataToEnv() and the "create new database" transaction
 			var transactionsToShip = Env.Journal.Shipper.ReadJournalForShippings(-1).ToList();
 
-			Assert.Equal(3,transactionsToShip.Count);
+			Assert.Equal(4, transactionsToShip.Count); 
 			Assert.Equal((uint)0, transactionsToShip[0].PreviousTransactionCrc);
 			Assert.Equal(transactionsToShip[0].Header.Crc, transactionsToShip[1].PreviousTransactionCrc);
 			Assert.Equal(transactionsToShip[1].Header.Crc, transactionsToShip[2].PreviousTransactionCrc);
+			Assert.Equal(transactionsToShip[2].Header.Crc, transactionsToShip[3].PreviousTransactionCrc);
+
+			var dataPairs = (from txFromCommit in transactionsToShipFromCommits
+				join txFromRead in transactionsToShip on txFromCommit.Header.TransactionId equals txFromRead.Header.TransactionId
+				select Tuple.Create(txFromCommit, txFromRead)).ToList();
+
+			dataPairs.ForEach(pair => Assert.Equal(ReadFromTransactionToShip(pair.Item1), ReadFromTransactionToShip(pair.Item2)));
+
+		}
+
+		private byte[] ReadFromTransactionToShip(TransactionToShip tx)
+		{
+			var compressedPages = (tx.Header.CompressedSize / AbstractPager.PageSize) + (tx.Header.CompressedSize % AbstractPager.PageSize == 0 ? 0 : 1);
+			var bufferSize = compressedPages * AbstractPager.PageSize;
+
+			var buffer = new byte[bufferSize];
+
+			tx.CompressedData.Read(buffer, 0, bufferSize);
+
+			return buffer;
+
+		}
+
+		private TCollection SetPreviousCrc<TCollection>(TCollection transactionsToShip)			
+			where TCollection : IEnumerable<TransactionToShip>
+		{
+			if (ReferenceEquals(transactionsToShip,null) || transactionsToShip.Any() == false) throw new ArgumentNullException("transactionsToShip");
+
+			TransactionToShip previousTx = null;
+
+			foreach (var tx in transactionsToShip)
+			{
+				tx.PreviousTransactionCrc = (previousTx != null) ? previousTx.Header.Crc : 0;
+				previousTx = tx;
+			}
+
+			return transactionsToShip;
 		}
 
 		private void WriteTestDataToEnv()

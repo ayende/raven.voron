@@ -21,6 +21,45 @@ namespace Voron.Tests.Util
 			public long Number2 { get; set; }
 		}
 
+#if DEBUG
+		[Fact]
+		public void Read_should_work_correctly()
+		{
+			var random = new Random();
+			var arr1 = new byte[25];
+			var arr2 = new byte[25];
+			var arr3 = new byte[25];
+
+			random.NextBytes(arr1);
+			random.NextBytes(arr2);
+			random.NextBytes(arr3);
+
+			fixed (byte* parr1 = arr1)
+			fixed (byte* parr2 = arr2)
+			fixed (byte* parr3 = arr3)
+			{
+				var array = new[] {parr1, parr2, parr3};
+				
+				var stream = new UnmanagedVectorMemoryStream(array, 1, 25);
+				var expectedReadOutut = new byte[50];				
+				fixed (byte* pExpectedReadOutut = expectedReadOutut)
+				{
+					NativeMethods.memcpy(pExpectedReadOutut, parr2, 25);
+					NativeMethods.memcpy(pExpectedReadOutut + 25, parr3, 25);
+				}
+
+				var readOutput = new byte[50];
+				var debugReadOutput = stream.DebugReadAllData(25);
+				stream.Read(readOutput, 0, 50);
+
+				Assert.Equal(debugReadOutput, readOutput);
+				Assert.Equal(expectedReadOutut, debugReadOutput);
+				Assert.Equal(expectedReadOutut, readOutput);
+			}
+			
+		}
+#endif
+
 		[Theory]
 		[InlineData(0)]
 		[InlineData(3)]

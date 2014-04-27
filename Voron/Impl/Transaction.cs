@@ -2,14 +2,12 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
-using System.Threading.Tasks;
 using Voron.Exceptions;
 using Voron.Impl.FileHeaders;
 using Voron.Impl.FreeSpace;
 using Voron.Impl.Journal;
 using Voron.Impl.Paging;
 using Voron.Trees;
-using Voron.Util;
 
 namespace Voron.Impl
 {
@@ -94,6 +92,24 @@ namespace Voron.Impl
 			InitTransactionHeader();
 
 			MarkTreesForWriteTransaction();
+		}
+
+		public void InitFromPageBuffers(byte*[] pageBuffers)
+		{
+			foreach (var buffer in pageBuffers)
+			{
+				var allocation = _env.ScratchBufferPool.Allocate(this, 1);
+				var page = _env.ScratchBufferPool.ReadPage(allocation.PositionInScratchBuffer);
+				NativeMethods.memcpy(page.Base, buffer, AbstractPager.PageSize);
+				
+				page.Dirty = true;
+				_dirtyPages.Add(page.PageNumber);
+
+				_transactionPages.Add(allocation);
+				_allocatedPagesInTransaction++;
+				
+				
+			}
 		}
 
 		private void InitTransactionHeader()

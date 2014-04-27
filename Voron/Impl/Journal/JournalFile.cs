@@ -7,12 +7,8 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.IO;
 using System.Linq;
-using System.Runtime.InteropServices;
-using System.Security;
 using System.Threading;
-using System.Threading.Tasks;
 using Voron.Impl.Paging;
 using Voron.Trees;
 using Voron.Util;
@@ -168,7 +164,10 @@ namespace Voron.Impl.Journal
             return _journalWriter.Read(pos, (byte*)txHeader, sizeof(TransactionHeader));
         }
 
-        public void Write(Transaction tx, byte*[] pages)
+		/// <summary>
+		/// write transaction's raw page data into journal. returns write page position
+		/// </summary>
+        public long Write(Transaction tx, byte*[] pages)
         {
             var txPages = tx.GetTransactionPages();
 
@@ -185,10 +184,13 @@ namespace Voron.Impl.Journal
                 _unusedPages.AddRange(unused);
             }
 
-            _journalWriter.WriteGather(writePagePos * AbstractPager.PageSize, pages);
+	        var position = writePagePos * AbstractPager.PageSize;
+	        _journalWriter.WriteGather(position, pages);
+
+			return writePagePos;
         }
 
-	    private unsafe void UpdatePageTranslationTable(Transaction tx, List<PageFromScratchBuffer> txPages, HashSet<PagePosition> unused, Dictionary<long, PagePosition> ptt)
+	    private void UpdatePageTranslationTable(Transaction tx, List<PageFromScratchBuffer> txPages, HashSet<PagePosition> unused, Dictionary<long, PagePosition> ptt)
 	    {
 		    for (int index = 1; index < txPages.Count; index++)
 		    {
@@ -199,8 +201,9 @@ namespace Voron.Impl.Journal
 			    if (_pageTranslationTable.TryGetValue(tx, pageNumber, out value))
 				    unused.Add(value);
 
-                if (ptt.ContainsKey(pageNumber))
-                    unused.Add(ptt[pageNumber]);
+			    PagePosition position;
+			    if (ptt.TryGetValue(pageNumber, out position))
+                    unused.Add(position);
 
 			    ptt[pageNumber] = new PagePosition
 			    {

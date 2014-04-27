@@ -2,7 +2,8 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
-using System.Runtime.InteropServices;
+using System.Linq;
+using Voron.Impl.Extensions;
 using Voron.Impl.Paging;
 using Voron.Util;
 
@@ -47,6 +48,9 @@ namespace Voron.Impl.Journal
 		protected bool ReadOneTransactionForShipping(StorageEnvironmentOptions options, out TransactionToShip transactionToShipRecord)
 		{
 			transactionToShipRecord = null;
+			if (_readingPage >= _pager.NumberOfAllocatedPages)
+				return false;
+
 			TransactionHeader* current;
 			if (!TryReadAndValidateHeader(options, out current))
 				return false;
@@ -62,13 +66,13 @@ namespace Voron.Impl.Journal
 			if (!ValidatePagesCrc(options, compressedPageCount, current))
 				return false;
 
-			var compressedPagesRaw = new byte[current->CompressedSize];
+			var compressedPagesRaw = new byte[compressedPageCount * AbstractPager.PageSize];
 			fixed (byte* compressedDataPtr = compressedPagesRaw)
-				NativeMethods.memcpy(compressedDataPtr, _pager.AcquirePagePointer(_readingPage), current->CompressedSize);
+				NativeMethods.memcpy(compressedDataPtr, _pager.AcquirePagePointer(_readingPage), compressedPageCount * AbstractPager.PageSize);
 
 			transactionToShipRecord = new TransactionToShip(*current)
 			{
-				CompressedData = new MemoryStream(compressedPagesRaw),
+				CompressedData = new MemoryStream(compressedPagesRaw), //no need to compress the pages --> after being written to Journal they are already compressed
 				PreviousTransactionCrc = _previousTransactionCrc
 			};
 
@@ -124,31 +128,7 @@ namespace Voron.Impl.Journal
 				return false;
 			}
 
-			var tempTransactionPageTranslaction = new Dictionary<long, JournalFile.PagePosition>();
-
-			for (var i = 0; i < current->PageCount; i++)
-			{
-				Debug.Assert(_pager.Disposed == false);
-				Debug.Assert(_recoveryPager.Disposed == false);
-
-				var page = _recoveryPager.Read(_recoveryPage);
-
-				tempTransactionPageTranslaction[page.PageNumber] = new JournalFile.PagePosition
-				{
-					JournalPos = _recoveryPage,
-					TransactionId = current->TransactionId
-				};
-
-				if (page.IsOverflow)
-				{
-					var numOfPages = _recoveryPager.GetNumberOfOverflowPages(page.OverflowSize);
-					_recoveryPage += numOfPages;
-				}
-				else
-				{
-					_recoveryPage++;
-				}
-			}
+			var tempTransactionPageTranslaction = (*current).GetTransactionToPageTranslation(_recoveryPager, ref _recoveryPage);
 
 			_readingPage += compressedPages;
 
@@ -161,6 +141,8 @@ namespace Voron.Impl.Journal
 
 			return true;
 		}
+
+		
 
 		private bool ValidatePagesCrc(StorageEnvironmentOptions options, int compressedPages, TransactionHeader* current)
 		{
@@ -184,6 +166,8 @@ namespace Voron.Impl.Journal
 			{
 			}
 		}
+
+		
 
 		public Dictionary<long, JournalFile.PagePosition> TransactionPageTranslation
 		{
