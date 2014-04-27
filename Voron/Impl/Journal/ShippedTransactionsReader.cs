@@ -16,28 +16,27 @@ namespace Voron.Impl.Journal
 		private uint _previousTransactionCrc;
 		private int currentPage;
 		private readonly IVirtualPager _pager;
-		private readonly Dictionary<long, JournalFile.PagePosition> _transactionPageTranslation;
-
+		private readonly List<long> _pageNumbers;
 		public ShippedTransactionsReader(IVirtualPager pager)
 		{
 			if (pager == null) throw new ArgumentNullException("pager");
 			_pager = pager;
-			_transactionPageTranslation = new Dictionary<long, JournalFile.PagePosition>();
+			_pageNumbers = new List<long>();
 		}
 
 		public TransactionHeader? LastTransactionHeader { get; private set; }
 
-		public Dictionary<long, JournalFile.PagePosition> TransactionPageTranslation
+		public IEnumerable<long> PageNumbers
 		{
-			get { return _transactionPageTranslation; }
+			get { return _pageNumbers; }
 		}
 
 		public void ReadTransactions(IEnumerable<TransactionToShip> shippedTransactions)
 		{
+
 			foreach (var transaction in shippedTransactions.OrderBy(x => x.Header.TransactionId))
 				ReadFromShippedTransaction(transaction);
 		}
-
 
 		protected void ReadFromShippedTransaction(TransactionToShip transaction)
 		{
@@ -64,15 +63,14 @@ namespace Voron.Impl.Journal
 				}
 			}
 
-			var tempTransactionPageTranslaction = transaction.Header.GetTransactionToPageTranslation(_pager, ref currentPage);
-
-			foreach (var pagePosition in tempTransactionPageTranslaction)
-				TransactionPageTranslation[pagePosition.Key] = pagePosition.Value;
+			var lastAddedPage = currentPage + transaction.Header.PageCount;
+			for(int pageNumber = currentPage; pageNumber < lastAddedPage; pageNumber++)
+				_pageNumbers.Add(pageNumber);
 
 			if(LastTransactionHeader.HasValue && LastTransactionHeader.Value.TransactionId < transaction.Header.TransactionId)
 				LastTransactionHeader = transaction.Header;
-			
-			currentPage += transaction.Header.PageCount;
+
+			currentPage = lastAddedPage;
 		}
 
 	}

@@ -435,21 +435,15 @@ namespace Voron.Impl.Journal
 					var shippedTransactionsReader = new ShippedTransactionsReader(recoveryPager);
 					shippedTransactionsReader.ReadTransactions(shippedTransactions);
 
-					var pagesToWrite = shippedTransactionsReader.TransactionPageTranslation
-						.Select(kvp => recoveryPager.Read(kvp.Value.JournalPos))
-						.OrderBy(x => x.PageNumber)
-						.ToList();
-
-					var pageBuffers = new byte*[pagesToWrite.Count];
-					for (int pageNumber = 0; pageNumber < pagesToWrite.Count; pageNumber++)
-						pageBuffers[pageNumber] = pagesToWrite[pageNumber].Base;
+					var pageData = new byte*[shippedTransactionsReader.PageNumbers.Count()];
+					foreach (var pageNumber in shippedTransactionsReader.PageNumbers)
+						pageData[pageNumber] = recoveryPager.Read(pageNumber).Base;
 
 					using (var tx = _waj._env.NewTransaction(TransactionFlags.ReadWrite))
 					{
-						tx.InitFromPageBuffers(pageBuffers);						
+						tx.WriteDirect(pageData);						
 						tx.Commit();
 					}
-
 				}
 			}
 		}
