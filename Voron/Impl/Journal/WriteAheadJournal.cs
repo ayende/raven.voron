@@ -410,11 +410,6 @@ namespace Voron.Impl.Journal
 				}
 			}
 
-			public void OnEmergencyLogsShipped(long lastShippedTransactionId)
-			{
-				throw new NotImplementedException();
-			}
-
 			public void ApplyShippedLogs(IEnumerable<TransactionToShip> shippedTransactions)
 			{
 				if(shippedTransactions == null)
@@ -423,22 +418,16 @@ namespace Voron.Impl.Journal
 
 				if (shippedTransactions.Any() == false)
 					return;
-
-				var logInfo = _waj._headerAccessor.Get(ptr => ptr->Journal);
-				using (
-					var recoveryPager =
-						_waj._env.Options.CreateScratchPager(StorageEnvironmentOptions.JournalRecoveryName(logInfo.CurrentJournal)))
+				
+				using (var tempPager = _waj._env.Options.CreateScratchPager(StorageEnvironmentOptions.TempBufferName()))
 				{
-					var shippedTransactionsReader = new ShippedTransactionsReader(recoveryPager);
+					tempPager.DeleteOnClose = true;
+					var shippedTransactionsReader = new ShippedTransactionsReader(tempPager);
 					shippedTransactionsReader.ReadTransactions(shippedTransactions);
-
-					var pageData = new byte*[shippedTransactionsReader.PageNumbers.Count()];
-					foreach (var pageNumber in shippedTransactionsReader.PageNumbers)
-						pageData[pageNumber] = recoveryPager.Read(pageNumber).Base;
 
 					using (var tx = _waj._env.NewTransaction(TransactionFlags.ReadWrite))
 					{
-						tx.WriteDirect(pageData);						
+						tx.WriteDirect(shippedTransactionsReader.RawPageData);						
 						tx.Commit();
 					}
 				}

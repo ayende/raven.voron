@@ -48,16 +48,11 @@ namespace Voron.Tests.Journal
 			Env.Journal.OnTransactionCommit += transactionsToShip.Add;
 			
 			WriteTestDataToEnv();
-			using (var snapshot = Env.CreateSnapshot())
-				DebugStuff.RenderAndShow(snapshot.Transaction, snapshot.Transaction.State.Root.State.RootPageNumber, 1);
-
 			using (var shippingDestinationEnv = new StorageEnvironment(StorageEnvironmentOptions.CreateMemoryOnly()))
 			{
 				shippingDestinationEnv.Journal.Shipper.ApplyShippedLogs(transactionsToShip);
 				using (var snapshot = shippingDestinationEnv.CreateSnapshot())
 				{
-					DebugStuff.RenderAndShow(snapshot.Transaction, snapshot.Transaction.State.Root.State.RootPageNumber, 1);
-					
 					var fooReadResult = snapshot.Read("TestTree", "foo");
 					Assert.NotNull(fooReadResult);
 
@@ -103,9 +98,9 @@ namespace Voron.Tests.Journal
 
 		private void ValidateLotsOfTestDataForTree(SnapshotReader snapshot, string treeName)
 		{
-			for (int i = 0; i < 1000; i++)
+			for (int i = 0; i < 50; i++)
 			{
-				for (int j = 0; j < 1000; j++)
+				for (int j = 0; j < 500; j++)
 				{
 					var index = (i + "/ " + j);
 					var key = "key/" + index;
@@ -122,11 +117,11 @@ namespace Voron.Tests.Journal
 
 		private void WriteLotsOfTestDataForTree(string treeName)
 		{
-			for (int i = 0; i < 1000; i++)
+			for (int i = 0; i < 50; i++)
 			{
 				using (var writeBatch = new WriteBatch())
 				{
-					for (int j = 0; j < 1000; j++)
+					for (int j = 0; j < 500; j++)
 					{
 						var index = (i + "/ " + j);
 						writeBatch.Add("key/" + index, StreamFor("value/" + index), treeName);

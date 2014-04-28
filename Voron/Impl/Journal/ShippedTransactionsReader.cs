@@ -26,16 +26,16 @@ namespace Voron.Impl.Journal
 
 		public TransactionHeader? LastTransactionHeader { get; private set; }
 
-		public IEnumerable<long> PageNumbers
-		{
-			get { return _pageNumbers; }
-		}
+		public byte*[] RawPageData { get; private set; }
 
 		public void ReadTransactions(IEnumerable<TransactionToShip> shippedTransactions)
 		{
-
 			foreach (var transaction in shippedTransactions.OrderBy(x => x.Header.TransactionId))
 				ReadFromShippedTransaction(transaction);
+
+			var pageData = new byte*[_pageNumbers.Count];
+			_pageNumbers.ForEach(pageNumber => pageData[pageNumber] = _pager.Read(pageNumber).Base);
+			RawPageData = pageData;
 		}
 
 		protected void ReadFromShippedTransaction(TransactionToShip transaction)

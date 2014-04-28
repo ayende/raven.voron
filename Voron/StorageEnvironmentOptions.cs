@@ -350,6 +350,11 @@ namespace Voron
 			return string.Format("{0:D19}.recovery", number);
 		}
 
+		public static string TempBufferName()
+		{
+			return string.Format("{0}.scratch", Guid.NewGuid());
+		}
+
 		public abstract void Dispose();
 
 		public abstract bool TryDeleteJournal(long number);
