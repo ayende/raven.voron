@@ -1,0 +1,41 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 2013
+VisualStudioVersion = 12.0.31101.0
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Voron", "Voron\Voron.csproj", "{0CBC70A3-3751-4D66-818E-E78D0A9574A8}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Sparrow", "..\..\ravendb-4.0\Raven.Sparrow\Sparrow\Sparrow.csproj", "{104699C8-0FD3-4AB9-8542-E8FA89ED199B}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Voron.Tests", "Voron.Tests\Voron.Tests.csproj", "{6AAAAECA-6E5C-4D79-8837-83403C811964}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Profiling|Any CPU = Profiling|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{0CBC70A3-3751-4D66-818E-E78D0A9574A8}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{0CBC70A3-3751-4D66-818E-E78D0A9574A8}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{0CBC70A3-3751-4D66-818E-E78D0A9574A8}.Profiling|Any CPU.ActiveCfg = Release|Any CPU
+		{0CBC70A3-3751-4D66-818E-E78D0A9574A8}.Profiling|Any CPU.Build.0 = Release|Any CPU
+		{0CBC70A3-3751-4D66-818E-E78D0A9574A8}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{0CBC70A3-3751-4D66-818E-E78D0A9574A8}.Release|Any CPU.Build.0 = Release|Any CPU
+		{104699C8-0FD3-4AB9-8542-E8FA89ED199B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{104699C8-0FD3-4AB9-8542-E8FA89ED199B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{104699C8-0FD3-4AB9-8542-E8FA89ED199B}.Profiling|Any CPU.ActiveCfg = Profiling|Any CPU
+		{104699C8-0FD3-4AB9-8542-E8FA89ED199B}.Profiling|Any CPU.Build.0 = Profiling|Any CPU
+		{104699C8-0FD3-4AB9-8542-E8FA89ED199B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{104699C8-0FD3-4AB9-8542-E8FA89ED199B}.Release|Any CPU.Build.0 = Release|Any CPU
+		{6AAAAECA-6E5C-4D79-8837-83403C811964}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{6AAAAECA-6E5C-4D79-8837-83403C811964}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{6AAAAECA-6E5C-4D79-8837-83403C811964}.Profiling|Any CPU.ActiveCfg = Release|Any CPU
+		{6AAAAECA-6E5C-4D79-8837-83403C811964}.Profiling|Any CPU.Build.0 = Release|Any CPU
+		{6AAAAECA-6E5C-4D79-8837-83403C811964}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{6AAAAECA-6E5C-4D79-8837-83403C811964}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal
